@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <!-- Clip paths split the cross exactly down the middle to create the twist weave effect -->
+    <clipPath id="left-half">
+      <rect x="0" y="0" width="50" height="100" />
+    </clipPath>
+    <clipPath id="right-half">
+      <rect x="50" y="0" width="50" height="100" />
+    </clipPath>
+  </defs>
+  
+  <!-- App Icon background & Solid blue emblem base -->
+  <rect x="0" y="0" width="100" height="100" rx="22" fill="#ffffff" />
+  <circle cx="50" cy="50" r="44" fill="#3B6DF6" />
+  
+  <!-- The Woven Geometric Christian Cross -->
+  <g stroke="#ffffff" stroke-width="4" fill="none">
+    <!-- Base outlines: Vertical beam (longer bottom) and Horizontal beam -->
+    <rect x="40" y="16" width="20" height="68" rx="6" />
+    <rect x="22" y="34" width="56" height="20" rx="6" />
+    
+    <!-- Weave Overlay 1: Vertical beam crosses OVER on the left half -->
+    <g clip-path="url(#left-half)">
+      <rect x="40" y="16" width="20" height="68" rx="6" fill="#3B6DF6" />
+    </g>
+    
+    <!-- Weave Overlay 2: Horizontal beam crosses OVER on the right half -->
+    <g clip-path="url(#right-half)">
+      <rect x="22" y="34" width="56" height="20" rx="6" fill="#3B6DF6" />
+    </g>
+  </g>
+</svg>
