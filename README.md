@@ -1,5 +1,16 @@
-# Faith In Login UI Firestore
+# Faith In
 
-Updated package with connected WordPress social/message system UI.
+Faith In is a responsive Christian community platform for encouragement, prayer, Scripture, resources, and meaningful conversations.
 
-Update v5.5.187: fixed the Library tab/page connection by restoring the Library renderer, keeping it connected to the existing WordPress resource system, and adding safe error handling so Library cannot fail silently.
+## Web platform
+
+The production web app is built with Next.js and is ready for Vercel. Community interactions persist in the browser immediately. Add the Firebase values from `.env.example` to enable the existing Firebase project for shared authentication and cloud data as that integration is completed.
+
+```bash
+npm install
+npm run dev
+```
+
+## Legacy WordPress package
+
+The original WordPress plugin source remains in this repository for reference and migration. The Vercel application is the `app/` project at the repository root.
