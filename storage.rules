@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSafeFaithInFile() {
+      return request.resource != null
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|video/(mp4|quicktime|webm|ogg)|application/pdf|audio/.*|application/zip');
+    }
+
+    // Recommended upload path: faith-in-uploads/{uid}/...
+    match /faith-in-uploads/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && isSafeFaithInFile();
+    }
+
+    // Legacy path kept read-only so old files do not break.
+    match /faith-in-uploads/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
