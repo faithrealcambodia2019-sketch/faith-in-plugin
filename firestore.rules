@@ -2,20 +2,46 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Faith In app users: each signed-in Firebase user can create, read,
-    // and update only their own profile document at users/{uid}.
-    match /users/{userId} {
-      allow create: if request.auth != null
-        && request.auth.uid == userId
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function ownsProfile(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function hasValidIdentity(userId) {
+      return request.resource.data.uid == userId
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email is string;
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.emailLower == request.auth.token.email.lower();
+    }
 
-      allow read: if request.auth != null
-        && request.auth.uid == userId;
+    function hasOnlyProfileFields() {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'email', 'emailLower', 'displayName', 'firstName', 'lastName',
+        'photoURL', 'provider', 'providers', 'appUserId', 'siteOrigin',
+        'createdAt', 'updatedAt', 'lastLoginAt', 'status'
+      ]);
+    }
 
-      allow update: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.uid == request.auth.uid;
+    match /users/{userId} {
+      allow create: if ownsProfile(userId)
+        && hasValidIdentity(userId)
+        && hasOnlyProfileFields()
+        && request.resource.data.displayName is string
+        && request.resource.data.status == 'active';
+
+      allow read: if ownsProfile(userId);
+
+      allow update: if ownsProfile(userId)
+        && hasValidIdentity(userId)
+        && hasOnlyProfileFields()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'firstName', 'lastName', 'photoURL', 'provider',
+          'providers', 'appUserId', 'siteOrigin', 'updatedAt', 'lastLoginAt'
+        ]);
 
       allow delete: if false;
     }

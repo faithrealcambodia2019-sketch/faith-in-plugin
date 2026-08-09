@@ -1,16 +1,25 @@
-# Faith In
+# Faith In Web Application
 
-Faith In is a responsive Christian community platform for encouragement, prayer, Scripture, resources, and meaningful conversations.
+Faith In is a standalone Christian community application built with Next.js, Firebase Authentication, Cloud Firestore, and Cloud Storage. It is deployed from GitHub to Vercel at [faithin.co](https://faithin.co).
 
-## Web platform
+This repository contains the web application only. It is not a WordPress plugin, and it contains no PHP runtime.
 
-The production web app is built with Next.js and is ready for Vercel. Community interactions persist in the browser immediately. Add the Firebase values from `.env.example` to enable the existing Firebase project for shared authentication and cloud data as that integration is completed.
+## Local development
 
-```bash
-npm install
-npm run dev
-```
+1. Copy `.env.example` to `.env.local` and add the public Firebase web configuration.
+2. Install dependencies with `npm install`.
+3. Start the application with `npm run dev`.
 
-## Legacy WordPress package
+Never commit service-account credentials, private keys, passwords, or user data. Firebase web configuration values are public identifiers; access is enforced by Authentication, App Check, and Security Rules.
 
-The original WordPress plugin source remains in this repository for reference and migration. The Vercel application is the `app/` project at the repository root.
+## Commands
+
+- `npm run dev` — local development
+- `npm run build` — production build and type validation
+- `npm run lint` — code quality checks
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Security](docs/SECURITY.md)
+- [Deployment](docs/DEPLOYMENT.md)

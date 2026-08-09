@@ -1,5 +1,5 @@
 Faith In Blessing built-in music library
-These 10 tracks are original 30-second instrumental worship-style loops created for this plugin package. They are not copies of famous Christian songs or hymns and contain no lyrics. Site users may use them royalty-free inside the Faith In Blessing feature.
+These 10 tracks are original 30-second instrumental worship-style loops created for the Faith In application. They are not copies of famous Christian songs or hymns and contain no lyrics. Site users may use them royalty-free inside the Faith In Blessing feature.
 - Grace Morning: grace-morning.mp3
 - Gentle Hallelujah: gentle-hallelujah.mp3
 - Peaceful Praise: peaceful-praise.mp3
