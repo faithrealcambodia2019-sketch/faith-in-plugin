@@ -1171,6 +1171,10 @@ function cvHasFirebaseConfig() {
     return !!(config && config.apiKey && config.authDomain && config.projectId && config.appId);
 }
 
+function cvUsesFirebaseBackend() {
+    return !!(typeof cv_ajax !== 'undefined' && cv_ajax.auth && cv_ajax.auth.backend_mode === 'firebase');
+}
+
 function cvFirebaseMissingMessage() {
     return 'Firebase signup/login is not configured yet. Add your Firebase Web App config in Settings > Faith In.';
 }
@@ -1302,9 +1306,29 @@ function cvStringHash(value) {
     return hash;
 }
 
+function cvFirebaseUserProfile(user, provider) {
+    const email = String((user && user.email) || state.authEmail || '').trim();
+    const name = String((user && user.displayName) || state.authName || (email ? email.split('@')[0] : '') || 'Faith In Member').trim();
+    const avatar = (user && user.photoURL) || '';
+    return {
+        id: email ? Math.abs(cvStringHash(email)) : 0,
+        uid: (user && user.uid) || '',
+        logged_in: true,
+        name: name,
+        displayName: name,
+        email: email,
+        avatar_url: avatar,
+        avatar: avatar,
+        provider: provider || 'firebase'
+    };
+}
+
 function cvFirebaseServerLogin(user, provider) {
     if (!user || typeof user.getIdToken !== 'function') {
         return Promise.reject(new Error('Firebase did not return a signed-in user.'));
+    }
+    if (cvUsesFirebaseBackend()) {
+        return Promise.resolve(cvFirebaseUserProfile(user, provider));
     }
     return user.getIdToken(true).then(function(idToken) {
         return new Promise(function(resolve, reject) {
@@ -1357,6 +1381,8 @@ function cvCompleteAuth(profile, options) {
         authErrors: {}
     });
 
+    if (cvUsesFirebaseBackend()) return;
+
     // Load signed-in content immediately after the browser accepts the session cookie.
     window.setTimeout(function() {
         ajaxRequest('cv_get_session')
@@ -1376,6 +1402,31 @@ function cvCompleteAuth(profile, options) {
                 loadResources();
             });
     }, 120);
+}
+
+function cvRestoreFirebaseSession() {
+    if (!cvUsesFirebaseBackend() || !cvHasFirebaseConfig()) return;
+    cvGetFirebaseAuthBundle()
+        .then(function(bundle) {
+            bundle.authModule.onAuthStateChanged(bundle.auth, function(user) {
+                if (!user) {
+                    if (!state.authLoading && state.isLoggedIn) cvClearLocalAuthState();
+                    return;
+                }
+                // Active signup/login flows finish their own state transition.
+                if (state.authLoading) return;
+                cvCreateOrUpdateFirestoreUser(bundle, user, { provider: 'firebase', isNew: false })
+                    .catch(function(error) {
+                        console.warn('Faith In Firestore session sync failed', error);
+                    })
+                    .then(function() {
+                        cvCompleteAuth(cvFirebaseUserProfile(user, 'firebase'));
+                    });
+            });
+        })
+        .catch(function(error) {
+            console.warn('Faith In Firebase session restore failed', error);
+        });
 }
 
 function cvRemoveAuthError(key) {
@@ -2700,9 +2751,11 @@ window.signOut = () => {
             });
     }
 
-    ajaxRequest('cv_logout').fail(function(xhr) {
-        console.warn('Faith In server logout warning', xhr);
-    });
+    if (!cvUsesFirebaseBackend()) {
+        ajaxRequest('cv_logout').fail(function(xhr) {
+            console.warn('Faith In server logout warning', xhr);
+        });
+    }
 };
 
     function cvReactionIconSvg(iconName, extraClass) {
@@ -7416,20 +7469,24 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         if (!cvIsSignedOut()) {
             loadPosts();
         }
-        ajaxRequest('cv_get_session').done(function(response) {
-            if (response.success && response.data && response.data.logged_in) {
-                const sessionProfile = cvNormalizeAuthProfile(response.data, response.data);
-                if (typeof cv_ajax !== 'undefined') {
-                    cv_ajax.auth = cv_ajax.auth || {};
-                    cv_ajax.auth.is_logged_in = true;
-                    cv_ajax.auth.current_user = sessionProfile;
+        if (cvUsesFirebaseBackend()) {
+            cvRestoreFirebaseSession();
+        } else {
+            ajaxRequest('cv_get_session').done(function(response) {
+                if (response.success && response.data && response.data.logged_in) {
+                    const sessionProfile = cvNormalizeAuthProfile(response.data, response.data);
+                    if (typeof cv_ajax !== 'undefined') {
+                        cv_ajax.auth = cv_ajax.auth || {};
+                        cv_ajax.auth.is_logged_in = true;
+                        cv_ajax.auth.current_user = sessionProfile;
+                    }
+                    syncAuthUserIntoForms(sessionProfile);
+                    if (state.tab === 'home' && (!Array.isArray(state.posts) || !state.posts.length)) {
+                        loadPosts();
+                    }
                 }
-                syncAuthUserIntoForms(sessionProfile);
-                if (state.tab === 'home' && (!Array.isArray(state.posts) || !state.posts.length)) {
-                    loadPosts();
-                }
-            }
-        });
+            });
+        }
     });
 
 })(jQuery);
