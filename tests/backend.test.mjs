@@ -21,6 +21,7 @@ globalThis.ProgressEvent = class { constructor(t,o){ Object.assign(this,o); this
 // ---- fake Firestore (path-keyed, supports subcollections and where) ----
 const store = {};            // "posts/id1" -> data
 let idSeq = 0;
+let failCompositeIndexOnce = false;
 const SENTINEL = '__serverTimestamp__';
 const key = p => p.join('/');
 
@@ -64,6 +65,12 @@ const dbMod = {
   getDocs: async (q) => {
     const prefix = key(q.col.path) + '/';
     const wheres = (q.clauses || []).filter(c => c && c.__where).map(c => c.__where);
+    if (failCompositeIndexOnce && wheres.length) {
+      failCompositeIndexOnce = false;
+      const error = new Error('The query requires an index.');
+      error.code = 'failed-precondition';
+      throw error;
+    }
     const rows = Object.entries(store)
       .filter(([k]) => k.startsWith(prefix) && !k.slice(prefix.length).includes('/'))
       .map(([k, data]) => ({ id: k.slice(prefix.length), data: () => data }))
@@ -201,6 +208,12 @@ check('returns items array', Array.isArray(r.data.items), r.data);
 check('shaped for renderer', r.data.items[0].author && 'can_delete' in r.data.items[0]);
 check('author can delete own', r.data.items[0].can_delete === true);
 check('has time string', typeof r.data.items[0].time === 'string');
+
+console.log('\n6b) Feed index compatibility');
+failCompositeIndexOnce = true;
+r = await call({ action: 'cv_get_posts' });
+check('falls back without exposing index error', r.success === true, r);
+check('fallback preserves visible posts', r.data.items.length > 0, r.data);
 
 console.log('\n7) Reactions');
 const pid = postIds()[0];

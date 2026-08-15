@@ -128,6 +128,24 @@
         return (v === 'private' || v === 'followers') ? v : 'public';
     }
 
+    function isFirestoreIndexError(error) {
+        var code = text(error && error.code).toLowerCase();
+        var message = text(error && error.message).toLowerCase();
+        return code === 'failed-precondition' || message.indexOf('requires an index') !== -1;
+    }
+
+    function publicErrorMessage(error) {
+        var code = text(error && error.code).toLowerCase();
+        var message = text(error && error.message, 500);
+        if (code === 'permission-denied') return 'You do not have permission to complete that action.';
+        if (code === 'unavailable' || code === 'deadline-exceeded') return 'Faith In could not reach the service. Please check your connection and try again.';
+        if (isFirestoreIndexError(error)) return 'We could not prepare this content right now. Please try again shortly.';
+        if (/https?:\/\/|firebase|firestore|googleapis| at |\bcode\s*:/i.test(message)) {
+            return 'Something went wrong. Please try again.';
+        }
+        return message || 'Something went wrong. Please try again.';
+    }
+
     function httpsUrl(value) {
         var url = text(value, 2048);
         return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
@@ -550,7 +568,7 @@
                 b.dbMod.orderBy('createdAt', 'desc'),
                 b.dbMod.limit(FEED_PAGE_SIZE)
             );
-            return Promise.all([b.dbMod.getDocs(publicQuery), b.dbMod.getDocs(ownQuery)]).then(function (snapshots) {
+            function shapeSnapshots(snapshots) {
                 var byId = {};
                 snapshots.forEach(function (snap) {
                     snap.forEach(function (d) { byId[d.id] = d.data(); });
@@ -558,6 +576,29 @@
                 var items = Object.keys(byId).map(function (id) { return shapePost(b, id, byId[id], user); });
                 items.sort(function (a, c) { return String(c.created_at || '').localeCompare(String(a.created_at || '')); });
                 return { items: items };
+            }
+
+            return Promise.all([b.dbMod.getDocs(publicQuery), b.dbMod.getDocs(ownQuery)]).then(shapeSnapshots).catch(function (error) {
+                if (!isFirestoreIndexError(error)) throw error;
+
+                // Production may briefly run before a newly declared composite
+                // index is available. Use the existing single-field index and
+                // filter the bounded result in memory until Firestore catches up.
+                var compatibilityQuery = b.dbMod.query(
+                    b.dbMod.collection(b.db, 'posts'),
+                    b.dbMod.orderBy('createdAt', 'desc'),
+                    b.dbMod.limit(FEED_PAGE_SIZE)
+                );
+                return b.dbMod.getDocs(compatibilityQuery).then(function (snapshot) {
+                    var visible = [];
+                    snapshot.forEach(function (d) {
+                        var data = d.data() || {};
+                        if (visibilityOf(data.visibility) === 'public' || data.authorUid === user.uid) {
+                            visible.push({ id: d.id, data: function () { return data; } });
+                        }
+                    });
+                    return shapeSnapshots([{ forEach: function (callback) { visible.forEach(callback); } }]);
+                });
             });
         });
     };
@@ -1367,7 +1408,7 @@
                             finish(200, { success: true, data: result === undefined ? {} : result });
                         })
                         .catch(function (err) {
-                            var message = (err && err.message) ? err.message : 'Something went wrong. Please try again.';
+                            var message = publicErrorMessage(err);
                             if (window.console && console.error) console.error('[Faith In] ' + action + ':', err);
                             // 200 with success:false is what the app's handlers expect.
                             finish(200, { success: false, data: message });
