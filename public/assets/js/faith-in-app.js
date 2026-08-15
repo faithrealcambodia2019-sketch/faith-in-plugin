@@ -7986,7 +7986,13 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     const panelPortal = document.createElement('div');
     panelPortal.className = 'cv-main-feed-messenger-portal';
 
-    const state = { open:false, conversations:[], activeThreadId:null, activeUser:null, messages:[], searchResults:[], attachment:null, error:'', sending:false };
+    const state = {
+        open:false, conversations:[], activeThreadId:null, activeUser:null, messages:[],
+        searchResults:[], searchTerm:'', searchLoading:false, attachment:null, error:'',
+        sending:false, loadingThreads:false, loadingThread:false, draft:''
+    };
+    let threadRequestToken = 0;
+    let searchRequestToken = 0;
     function isLoggedIn(){ return !!(cv_ajax.auth && cv_ajax.auth.is_logged_in); }
     const loginUrl = '/wp-login.php';
 
@@ -8053,6 +8059,19 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     }
     function lastActivity(thread){ return timeLabel(thread && (thread.last_message_at || thread.updated_at || thread.created_at || thread.created || thread.date)); }
+    function dayLabel(value){
+        if(!value) return '';
+        const parsed = new Date(String(value).replace(' ', 'T'));
+        if(Number.isNaN(parsed.getTime())) return '';
+        const today = new Date();
+        const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const startValue = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+        const days = Math.round((startToday.getTime() - startValue.getTime()) / 86400000);
+        if(days === 0) return 'Today';
+        if(days === 1) return 'Yesterday';
+        if(days > 1 && days < 7) return parsed.toLocaleDateString(undefined, { weekday:'long' });
+        return parsed.toLocaleDateString(undefined, { month:'short', day:'numeric', year:parsed.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+    }
     function isVisible(node){ return !!(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length)); }
     function findMount(){ const candidates=Array.from(document.querySelectorAll('#cv-nav-message-slot-desktop, #cv-nav-message-slot-mobile')); return candidates.find(isVisible) || candidates[0] || null; }
     function mountHolder(){ const mount=findMount(); if(mount && holder.parentNode!==mount) mount.appendChild(holder); if(document.body && panelPortal.parentNode!==document.body) document.body.appendChild(panelPortal); }
@@ -8060,26 +8079,38 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
 
     function list(){
         if(!isLoggedIn()) return `<div class="cv-feed-msg-empty"><strong>Messaging</strong><p>Please sign in to chat.</p><a class="cv-social-button" href="${e(loginUrl)}">Sign in</a></div>`;
-        const search = state.searchResults.length ? `<div class="cv-feed-msg-search-results"><div class="cv-feed-msg-list-title"><span>People</span><em>${state.searchResults.length}</em></div>${state.searchResults.map(u=>`<button type="button" class="cv-feed-msg-user-result" data-cv-main-msg-user="${e(u.id)}" data-cv-main-msg-user-name="${e(u.name||'User')}">${av(u)}<span><strong>${e(u.name||'User')}</strong><small>${e(handle(u))}</small></span></button>`).join('')}</div>` : '';
+        const search = state.searchLoading
+            ? `<div class="cv-feed-msg-search-state" role="status"><span class="cv-social-spinner"></span><span>Finding members…</span></div>`
+            : state.searchResults.length
+                ? `<div class="cv-feed-msg-search-results"><div class="cv-feed-msg-list-title"><span>People</span><em>${state.searchResults.length}</em></div>${state.searchResults.map(u=>`<button type="button" class="cv-feed-msg-user-result" data-cv-main-msg-user="${e(u.id)}" data-cv-main-msg-user-name="${e(u.name||'User')}">${av(u)}<span><strong>${e(u.name||'User')}</strong><small>${e(handle(u))}</small></span><span class="cv-feed-msg-result-action">Message</span></button>`).join('')}</div>`
+                : state.searchTerm ? `<div class="cv-feed-msg-search-state"><strong>No members found</strong><span>Try a different name or ministry.</span></div>` : '';
         const conv = state.conversations.length ? state.conversations.map(t=>{
             const u=t.other_user||{name:'User'};
             const n=Number(t.unread_count||0);
             const when=lastActivity(t);
             const active=String(state.activeThreadId)===String(t.id);
             return `<button type="button" class="cv-feed-msg-thread ${active?'is-active':''} ${n?'has-unread':''}" data-cv-main-msg-thread="${e(t.id)}"><span class="cv-feed-msg-avatar-wrap">${av(u)}${n?'<i aria-hidden="true"></i>':''}</span><span class="cv-feed-msg-thread-main"><span class="cv-feed-msg-thread-top"><strong>${e(u.name||'User')}</strong>${when?`<small class="cv-feed-msg-time">${e(when)}</small>`:''}</span><small class="cv-feed-msg-preview">${e(t.last_message||handle(u))}</small></span>${n?`<em aria-label="${e(n)} unread messages">${n>99?'99+':n}</em>`:''}</button>`;
-        }).join('') : '<div class="cv-feed-msg-empty small"><strong>No conversations yet</strong><p>Search for a member or choose New Conversation to start messaging.</p></div>';
-        return `<div class="cv-feed-msg-list"><div class="cv-feed-msg-sidebar-top"><div class="cv-feed-msg-search"><span class="cv-feed-msg-search-icon">${msgIcon('search',18)}</span><input type="search" data-cv-main-msg-search placeholder="Search messages or people"></div><button type="button" class="cv-feed-msg-new" data-cv-main-msg-new>${msgIcon('plus',18)}<span>New Conversation</span></button></div>${search}<div class="cv-feed-msg-list-title"><span>Conversations</span><em>${state.conversations.length}</em></div><div class="cv-feed-msg-thread-list">${conv}</div></div>`;
+        }).join('') : state.loadingThreads ? '<div class="cv-feed-msg-list-loading" role="status"><span></span><span></span><span></span></div>' : '<div class="cv-feed-msg-empty small"><strong>No conversations yet</strong><p>Search for a member or choose New Conversation to start messaging.</p></div>';
+        return `<div class="cv-feed-msg-list"><div class="cv-feed-msg-sidebar-brand"><div><strong>Messages</strong><small>${unread() ? unread() + ' unread' : 'Your conversations'}</small></div><button type="button" class="cv-feed-msg-new-icon" data-cv-main-msg-new aria-label="New conversation">${msgIcon('plus',20)}</button></div><div class="cv-feed-msg-sidebar-top"><div class="cv-feed-msg-search"><span class="cv-feed-msg-search-icon">${msgIcon('search',18)}</span><input type="search" value="${e(state.searchTerm)}" data-cv-main-msg-search placeholder="Search messages or people" autocomplete="off"></div><button type="button" class="cv-feed-msg-new" data-cv-main-msg-new>${msgIcon('plus',18)}<span>New conversation</span></button></div>${search}<div class="cv-feed-msg-list-title"><span>Conversations</span><em>${state.conversations.length}</em></div><div class="cv-feed-msg-thread-list">${conv}</div></div>`;
     }
     function composer(){
         const preview = state.attachment ? `<div class="cv-feed-msg-attachment-preview">${msgIcon(state.attachment.type==='image'?'image':(state.attachment.type==='video'?'film':'file'),16)}<span>${e(state.attachment.name||'attachment')}</span><button type="button" data-cv-main-msg-clear-attachment aria-label="Remove attachment">${msgIcon('close',14)}</button></div>` : '';
         const err = state.error ? `<div class="cv-feed-msg-error"><button type="button" data-cv-main-msg-clear-error>${msgIcon('close',13)}</button><span>${e(state.error)}</span></div>` : '';
-        return `<div class="cv-feed-msg-composer-wrap">${err}<form class="cv-feed-msg-form" data-cv-main-msg-form>${preview}<textarea rows="1" data-cv-main-msg-body placeholder="Write a message..." autocomplete="off"></textarea><div class="cv-feed-msg-composer-bar"><div class="cv-feed-msg-tools"><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="image" title="Attach image">${msgIcon('image',20)}</button><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="video" title="Attach video">${msgIcon('film',20)}</button><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="file" title="Attach file">${msgIcon('paperclip',20)}</button></div><button type="submit" class="cv-feed-msg-send is-disabled ${state.sending?'is-sending':''}" aria-label="Send message">${state.sending?'Sending…':'Send'}</button></div><input hidden type="file" accept="image/*" data-cv-main-msg-file-input="image"><input hidden type="file" accept="video/*" data-cv-main-msg-file-input="video"><input hidden type="file" data-cv-main-msg-file-input="file"></form></div>`;
+        return `<div class="cv-feed-msg-composer-wrap">${err}<form class="cv-feed-msg-form" data-cv-main-msg-form>${preview}<textarea rows="1" data-cv-main-msg-body placeholder="Message ${e((state.activeUser&&state.activeUser.name)||'member')}" autocomplete="off">${e(state.draft)}</textarea><div class="cv-feed-msg-composer-bar"><div class="cv-feed-msg-tools"><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="image" title="Attach image" aria-label="Attach image">${msgIcon('image',20)}</button><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="video" title="Attach video" aria-label="Attach video">${msgIcon('film',20)}</button><button type="button" class="cv-feed-msg-tool" data-cv-main-msg-attach="file" title="Attach PDF or ZIP" aria-label="Attach PDF or ZIP">${msgIcon('paperclip',20)}</button></div><span class="cv-feed-msg-enter-hint">Enter to send</span><button type="submit" class="cv-feed-msg-send is-disabled ${state.sending?'is-sending':''}" aria-label="Send message"><span>${state.sending?'Sending':'Send'}</span>${msgIcon('send',17)}</button></div><input hidden type="file" accept="image/jpeg,image/png,image/gif,image/webp" data-cv-main-msg-file-input="image"><input hidden type="file" accept="video/mp4,video/webm" data-cv-main-msg-file-input="video"><input hidden type="file" accept="application/pdf,application/zip,.pdf,.zip" data-cv-main-msg-file-input="file"></form></div>`;
     }
     function chat(){
         if(!state.activeThreadId&&!state.activeUser) return `<div class="cv-feed-msg-welcome"><div class="cv-feed-msg-welcome-icon cv-linkedin-empty-bubble">${msgIcon('message',56)}</div><strong>Welcome to Messaging</strong><p>Choose a conversation, search for a member, or start a new chat in a cleaner professional workspace.</p><div class="cv-feed-msg-welcome-points"><span>${msgIcon('message',16)} Direct chat</span><span>${msgIcon('image',16)} Photo sharing</span><span>${msgIcon('film',16)} Video sharing</span><span>${msgIcon('file',16)} File sharing</span></div></div>`;
         const u=state.activeUser||{name:'Chat'};
-        const bubbles=state.messages.length?state.messages.map(m=>`<div class="cv-feed-msg-row ${m.mine?'mine':'theirs'}"><div class="cv-feed-msg-bubble ${m.mine?'mine':'theirs'}">${renderAttachment(m.attachment,m.mine)}${m.body?`<p dir="auto">${e(m.body||'')}</p>`:''}<small><span>${e(timeLabel(m.created_at)||m.created_at||'')}</span>${m.mine?`<span class="cv-feed-msg-checks">${msgIcon('checkcheck',14)}</span>`:''}</small></div></div>`).join(''):`<div class="cv-feed-msg-empty small cv-feed-msg-start"><span class="cv-feed-msg-start-icon">${msgIcon('message',32)}</span><strong>No messages yet</strong><p>Say hello and start the conversation.</p></div>`;
-        return `<div class="cv-feed-msg-chat"><div class="cv-feed-msg-chat-head"><button type="button" data-cv-main-msg-back class="cv-feed-msg-back" aria-label="Back to conversations">${msgIcon('back',18)}</button>${av(u)}<div class="cv-feed-msg-chat-title"><strong>${e(u.name||'Chat')}</strong><small>${e(handle(u))} · Direct message</small></div><div class="cv-feed-msg-chat-actions"><button type="button" class="cv-feed-msg-chat-action" data-cv-msg-focus-search title="Search people">${msgIcon('search',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-phone-action" data-cv-main-msg-call="audio" title="Voice call">${msgIcon('phone',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-video-action" data-cv-main-msg-call="video" title="Video call">${msgIcon('video',20)}</button></div></div><div class="cv-feed-msg-bubbles" data-cv-main-msg-bubbles role="log" aria-live="polite" aria-relevant="additions text">${bubbles}</div>${composer()}<p class="cv-feed-msg-hint">Press Enter to send. Use Shift + Enter for a new line.</p></div>`;
+        let previousDay='';
+        const bubbles=state.loadingThread
+            ? `<div class="cv-feed-msg-chat-loading" role="status"><span></span><span></span><span></span><small>Loading conversation…</small></div>`
+            : state.messages.length ? state.messages.map(m=>{
+                const currentDay=dayLabel(m.created_at);
+                const separator=currentDay&&currentDay!==previousDay?`<div class="cv-feed-msg-day"><span>${e(currentDay)}</span></div>`:'';
+                previousDay=currentDay||previousDay;
+                return `${separator}<div class="cv-feed-msg-row ${m.mine?'mine':'theirs'} ${m.pending?'is-pending':''}" data-message-id="${e(m.id||'')}"><div class="cv-feed-msg-bubble ${m.mine?'mine':'theirs'}">${renderAttachment(m.attachment,m.mine)}${m.body?`<p dir="auto">${e(m.body||'')}</p>`:''}<small><span>${m.pending?'Sending…':e(timeLabel(m.created_at)||m.created_at||'')}</span>${m.mine&&!m.pending?`<span class="cv-feed-msg-checks">${msgIcon('checkcheck',14)}</span>`:''}</small></div></div>`;
+            }).join(''):`<div class="cv-feed-msg-empty small cv-feed-msg-start"><span class="cv-feed-msg-start-icon">${msgIcon('message',32)}</span><strong>Start your conversation</strong><p>Send a kind hello, a prayer, or an encouragement.</p></div>`;
+        return `<div class="cv-feed-msg-chat"><div class="cv-feed-msg-chat-head"><button type="button" data-cv-main-msg-back class="cv-feed-msg-back" aria-label="Back to conversations">${msgIcon('back',18)}</button><span class="cv-feed-msg-chat-avatar">${av(u)}<i aria-hidden="true"></i></span><div class="cv-feed-msg-chat-title"><strong>${e(u.name||'Chat')}</strong><small><span class="cv-feed-msg-online-dot"></span>Faith In member</small></div><div class="cv-feed-msg-chat-actions"><button type="button" class="cv-feed-msg-chat-action" data-cv-msg-focus-search title="Find another member" aria-label="Find another member">${msgIcon('search',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-phone-action" data-cv-main-msg-call="audio" title="Voice calling coming soon" aria-label="Voice calling information">${msgIcon('phone',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-video-action" data-cv-main-msg-call="video" title="Video calling coming soon" aria-label="Video calling information">${msgIcon('video',20)}</button></div></div><div class="cv-feed-msg-bubbles" data-cv-main-msg-bubbles role="log" aria-live="polite" aria-relevant="additions text">${bubbles}</div>${composer()}</div>`;
     }
     function syncComposerHeight(scope){
         const target = scope && scope.querySelector ? scope.querySelector("[data-cv-main-msg-body]") : q("[data-cv-main-msg-body]");
@@ -8094,45 +8125,122 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         const search = q("[data-cv-main-msg-search]");
         if(search) search.focus();
     }
-    function render(){ mountHolder(); const n=unread(); const badge=n?`<em>${n>99?'99+':n}</em>`:''; const hasActiveChat=!!(state.activeThreadId||state.activeUser); holder.innerHTML=`<button type="button" class="cv-feed-messenger-button cv-nav-clean-item" data-cv-main-msg-toggle aria-label="Messages" aria-expanded="${state.open?'true':'false'}" title="Messages"><span class="cv-feed-nav-action-icon cv-feed-nav-action-icon-message" aria-hidden="true">${msgIcon('message',20)}</span><span class="cv-feed-nav-action-label">Messaging</span>${badge}</button>`; panelPortal.innerHTML=`<div class="cv-feed-msg-backdrop ${state.open?'is-open':''}" data-cv-main-msg-backdrop></div><section class="cv-feed-messenger-panel cv-linkedin-chat-panel cv-react-exact-ui ${state.open?'is-open':''} ${hasActiveChat?'cv-chat-active':''}" aria-label="Messaging" role="dialog" aria-modal="true"><header class="cv-feed-msg-header"><div><strong>Messaging</strong><small>Professional, secure conversations</small></div><button type="button" data-cv-main-msg-close aria-label="Close messaging">${msgIcon('close',22)}</button></header><div class="cv-feed-msg-body">${list()}${chat()}</div></section>`; holder.classList.toggle('is-open', !!state.open); panelPortal.classList.toggle('is-open', !!state.open); const b=q('[data-cv-main-msg-bubbles]'); if(b) b.scrollTop=b.scrollHeight; syncComposerHeight(document); updateSendState(); if(state.open) setTimeout(focusMessengerPrimaryField, 0); }
+    function render(options={}){
+        mountHolder();
+        const oldBubbles=q('[data-cv-main-msg-bubbles]');
+        const oldDistance=oldBubbles ? oldBubbles.scrollHeight-oldBubbles.scrollTop-oldBubbles.clientHeight : 0;
+        const n=unread(); const badge=n?`<em>${n>99?'99+':n}</em>`:''; const hasActiveChat=!!(state.activeThreadId||state.activeUser);
+        holder.innerHTML=`<button type="button" class="cv-feed-messenger-button cv-nav-clean-item" data-cv-main-msg-toggle aria-label="Messages${n?' — '+n+' unread':''}" aria-expanded="${state.open?'true':'false'}" title="Messages"><span class="cv-feed-nav-action-icon cv-feed-nav-action-icon-message" aria-hidden="true">${msgIcon('message',20)}</span><span class="cv-feed-nav-action-label">Messages</span>${badge}</button>`;
+        panelPortal.innerHTML=`<div class="cv-feed-msg-backdrop ${state.open?'is-open':''}" data-cv-main-msg-backdrop></div><section class="cv-feed-messenger-panel cv-linkedin-chat-panel cv-react-exact-ui ${state.open?'is-open':''} ${hasActiveChat?'cv-chat-active':''}" aria-label="Messages" role="dialog" aria-modal="true"><header class="cv-feed-msg-header"><div><span class="cv-feed-msg-header-mark">${msgIcon('message',20)}</span><span><strong>Faith In Messages</strong><small>Private community conversations</small></span></div><button type="button" data-cv-main-msg-close aria-label="Close messages">${msgIcon('close',22)}</button></header><div class="cv-feed-msg-body">${list()}${chat()}</div></section>`;
+        holder.classList.toggle('is-open', !!state.open); panelPortal.classList.toggle('is-open', !!state.open);
+        const b=q('[data-cv-main-msg-bubbles]');
+        if(b){ if(options.preserveScroll&&oldDistance>80) b.scrollTop=Math.max(0,b.scrollHeight-b.clientHeight-oldDistance); else b.scrollTop=b.scrollHeight; }
+        syncComposerHeight(document); updateSendState();
+        if(state.open&&options.focus) setTimeout(focusMessengerPrimaryField, 0);
+    }
 
-    async function load(){ if(!isLoggedIn()) return; const d=await api('/social/messages/threads'); state.conversations=d.items||[]; render(); }
-    async function openThread(id){ state.activeThreadId=id; state.activeUser=null; state.messages=[]; state.attachment=null; render(); const d=await api(`/social/messages/threads/${id}`); state.messages=d.items||[]; state.activeUser=d.other_user||null; await load(); state.activeThreadId=id; render(); }
-    async function search(searchTerm){ const term=(searchTerm||'').trim(); const d=await api('/social/users/search?q='+encodeURIComponent(term)); state.searchResults=d.items||[]; render(); const input=q('[data-cv-main-msg-search]'); if(input){input.value=term;input.focus();} }
+    async function load(options={}){ if(!isLoggedIn()) return; if(!state.conversations.length) state.loadingThreads=true; const d=await api('/social/messages/threads'); state.conversations=d.items||[]; state.loadingThreads=false; render({preserveScroll:options.preserveScroll}); }
+    async function openThread(id){
+        const token=++threadRequestToken;
+        state.activeThreadId=id; state.activeUser=null; state.messages=[]; state.attachment=null; state.error=''; state.draft=''; state.loadingThread=true; render();
+        try {
+            const d=await api(`/social/messages/threads/${id}`);
+            if(token!==threadRequestToken) return;
+            state.messages=d.items||[]; state.activeUser=d.other_user||null; state.loadingThread=false;
+            const threads=await api('/social/messages/threads');
+            if(token!==threadRequestToken) return;
+            state.conversations=threads.items||[]; render({focus:true});
+        } catch(error){ if(token===threadRequestToken){ state.loadingThread=false; throw error; } }
+    }
+    async function search(searchTerm){
+        const token=++searchRequestToken; const term=(searchTerm||'').trim(); state.searchTerm=searchTerm||'';
+        if(!term){ state.searchResults=[]; state.searchLoading=false; render(); return; }
+        state.searchLoading=true; render();
+        const d=await api('/social/users/search?q='+encodeURIComponent(term));
+        if(token!==searchRequestToken) return;
+        state.searchResults=d.items||[]; state.searchLoading=false; render();
+        const input=q('[data-cv-main-msg-search]'); if(input){input.focus(); input.setSelectionRange(input.value.length,input.value.length);}
+    }
     function cleanAttachment(att){ if(!att) return null; return { type:att.type||'file', name:att.name||'attachment', data_url:att.dataUrl||att.data_url||'' }; }
-    async function send(body, attachment){ const text=(body||'').trim(); const file=cleanAttachment(attachment); if(!text&&!file) return; const payload={body:text}; if(file) payload.attachment=file; if(state.activeThreadId){ await api(`/social/messages/threads/${state.activeThreadId}`,{method:'POST',body:payload}); await openThread(state.activeThreadId); } else if(state.activeUser&&state.activeUser.id){ payload.recipient_id=state.activeUser.id; const d=await api('/social/messages/threads',{method:'POST',body:payload}); await openThread(d.thread_id); } }
+    async function send(body, attachment){
+        const text=(body||'').trim(); const file=cleanAttachment(attachment); if(!text&&!file) return;
+        const payload={body:text}; if(file) payload.attachment=file;
+        if(state.activeThreadId){ await api(`/social/messages/threads/${state.activeThreadId}`,{method:'POST',body:payload}); return state.activeThreadId; }
+        if(state.activeUser&&state.activeUser.id){ payload.recipient_id=state.activeUser.id; const d=await api('/social/messages/threads',{method:'POST',body:payload}); return d.thread_id; }
+        throw new Error('Choose a member to message first.');
+    }
     function showError(msg){ state.error=msg||'Attachment failed.'; render(); }
     function showCallNotice(){ if(typeof window.showToast==='function') window.showToast('Voice and video calls need a real-time calling server. Messaging is connected and ready.', 'info'); else showError('Voice and video calls need a real-time calling server. Messaging is connected and ready.'); }
-    function fileSelected(input,type){ const file=input.files&&input.files[0]; if(!file) return; if(file.size>500*1024){ input.value=''; showError('File too large. Max 500KB allowed.'); return; } const reader=new FileReader(); reader.onload=function(ev){ state.attachment={type:type||'file', name:file.name, dataUrl:ev.target.result}; state.error=''; render(); }; reader.onerror=function(){ showError('Could not read this file.'); }; reader.readAsDataURL(file); input.value=''; }
+    function fileSelected(input,type){
+        const file=input.files&&input.files[0]; if(!file) return;
+        const allowed={ image:/^image\/(jpeg|png|gif|webp)$/i, video:/^video\/(mp4|webm)$/i, file:/^application\/(pdf|zip)$/i };
+        if(!allowed[type||'file'].test(file.type||'')){ input.value=''; showError(type==='file'?'Please choose a PDF or ZIP file.':'That media format is not supported.'); return; }
+        if(file.size>500*1024){ input.value=''; showError('Attachment is too large. Maximum size is 500 KB.'); return; }
+        const reader=new FileReader();
+        reader.onload=function(ev){ state.attachment={type:type||'file', name:file.name, dataUrl:ev.target.result}; state.error=''; render({focus:true}); };
+        reader.onerror=function(){ showError('Could not read this file. Please try another one.'); };
+        reader.readAsDataURL(file); input.value='';
+    }
 
-    window.cvOpenFaithInChat = function(userOrId, name){ if(!isLoggedIn()){ if(typeof window.showToast==='function') window.showToast('Please sign in to message members.', 'info'); return; } const user = (typeof userOrId === 'object' && userOrId) ? userOrId : { id: Number(userOrId || 0), name: name || 'User' }; if(!user.id){ if(typeof window.showToast==='function') window.showToast('User not found.', 'error'); return; } state.open = true; state.activeThreadId = null; state.activeUser = user; state.messages = []; state.searchResults = []; state.attachment=null; render(); load().catch(()=>{}); };
+    window.cvOpenFaithInChat = function(userOrId, name){ if(!isLoggedIn()){ if(typeof window.showToast==='function') window.showToast('Please sign in to message members.', 'info'); return; } const user = (typeof userOrId === 'object' && userOrId) ? userOrId : { id: Number(userOrId || 0), name: name || 'User' }; if(!user.id){ if(typeof window.showToast==='function') window.showToast('User not found.', 'error'); return; } ++threadRequestToken; state.open = true; state.activeThreadId = null; state.activeUser = user; state.messages = []; state.searchResults = []; state.searchTerm=''; state.attachment=null; state.draft=''; state.error=''; render({focus:true}); load({preserveScroll:true}).catch(()=>{}); };
     window.cvOpenFaithInMessageThread = function(threadId){ if(!threadId) return; state.open=true; render(); openThread(threadId).catch(err=>showError(err.message||'Could not open that conversation.')); };
 
     const observer = new MutationObserver(function(){ mountHolder(); }); observer.observe(wrap, { childList:true, subtree:true }); window.addEventListener('resize', mountHolder);
     let timer=null;
     function updateSendState(){ const input=q('[data-cv-main-msg-body]'); const sendBtn=q('.cv-feed-msg-send'); const disabled = !!state.sending || !((input&&input.value.trim())||state.attachment); if(sendBtn){ sendBtn.classList.toggle('is-disabled', disabled); sendBtn.disabled = disabled; } }
-    const handleMessengerInput = ev=>{ if(ev.target.matches('[data-cv-main-msg-search]')){ const qv=ev.target.value; clearTimeout(timer); timer=setTimeout(()=>search(qv).catch(()=>{}),250); return; } if(ev.target.matches('[data-cv-main-msg-body]')){ syncComposerHeight(document); updateSendState(); return; } if(ev.target.matches('[data-cv-main-msg-file-input]')) fileSelected(ev.target, ev.target.dataset.cvMainMsgFileInput||'file'); };
+    const handleMessengerInput = ev=>{ if(ev.target.matches('[data-cv-main-msg-search]')){ const qv=ev.target.value; state.searchTerm=qv; clearTimeout(timer); timer=setTimeout(()=>search(qv).catch(()=>{ state.searchLoading=false; render(); }),300); return; } if(ev.target.matches('[data-cv-main-msg-body]')){ state.draft=ev.target.value; syncComposerHeight(document); updateSendState(); return; } if(ev.target.matches('[data-cv-main-msg-file-input]')) fileSelected(ev.target, ev.target.dataset.cvMainMsgFileInput||'file'); };
     holder.addEventListener('input', handleMessengerInput);
     panelPortal.addEventListener('input', handleMessengerInput);
-    const handleMessengerClick = ev=>{ ev.stopPropagation(); if(ev.target.closest('[data-cv-main-msg-backdrop]')){ state.open=false; render(); return; } if(ev.target.closest('[data-cv-main-msg-toggle]')){ state.open=!state.open; render(); if(state.open) load().catch(()=>{}); return; } if(ev.target.closest('[data-cv-main-msg-close]')){ state.open=false; render(); return; } if(ev.target.closest('[data-cv-msg-focus-search]')){ const input=q('[data-cv-main-msg-search]'); if(input){ input.focus(); input.select && input.select(); } return; } if(ev.target.closest('[data-cv-main-msg-new]')){ const input=q('[data-cv-main-msg-search]'); if(input){ input.focus(); input.select && input.select(); } search('').catch(()=>{}); return; } if(ev.target.closest('[data-cv-main-msg-back]')){ state.activeThreadId=null; state.activeUser=null; state.messages=[]; state.attachment=null; render(); return; } if(ev.target.closest('[data-cv-main-msg-clear-attachment]')){ state.attachment=null; render(); return; } if(ev.target.closest('[data-cv-main-msg-clear-error]')){ state.error=''; render(); return; } if(ev.target.closest('[data-cv-main-msg-call]')){ showCallNotice(); return; } const attach=ev.target.closest('[data-cv-main-msg-attach]'); if(attach){ const input=q(`[data-cv-main-msg-file-input="${attach.dataset.cvMainMsgAttach}"]`); if(input) input.click(); return; } const th=ev.target.closest('[data-cv-main-msg-thread]'); if(th){ openThread(th.dataset.cvMainMsgThread).catch(()=>{}); return; } const ub=ev.target.closest('[data-cv-main-msg-user]'); if(ub){ const found=state.searchResults.find(u=>String(u.id)===String(ub.dataset.cvMainMsgUser)); state.activeThreadId=null; state.activeUser=found||{id:Number(ub.dataset.cvMainMsgUser),name:ub.dataset.cvMainMsgUserName||'User'}; state.messages=[]; state.searchResults=[]; state.attachment=null; render(); return; } };
+    const handleMessengerClick = ev=>{ ev.stopPropagation(); if(ev.target.closest('[data-cv-main-msg-backdrop]')){ state.open=false; render(); return; } if(ev.target.closest('[data-cv-main-msg-toggle]')){ state.open=!state.open; render({focus:state.open}); if(state.open) load({preserveScroll:true}).catch(()=>{}); return; } if(ev.target.closest('[data-cv-main-msg-close]')){ state.open=false; render(); return; } if(ev.target.closest('[data-cv-msg-focus-search]')||ev.target.closest('[data-cv-main-msg-new]')){ ++threadRequestToken; state.activeThreadId=null; state.activeUser=null; state.messages=[]; state.attachment=null; state.draft=''; state.searchTerm=''; state.searchResults=[]; render({focus:true}); return; } if(ev.target.closest('[data-cv-main-msg-back]')){ ++threadRequestToken; state.activeThreadId=null; state.activeUser=null; state.messages=[]; state.attachment=null; state.draft=''; render(); return; } if(ev.target.closest('[data-cv-main-msg-clear-attachment]')){ state.attachment=null; render({focus:true}); return; } if(ev.target.closest('[data-cv-main-msg-clear-error]')){ state.error=''; render({focus:true}); return; } if(ev.target.closest('[data-cv-main-msg-call]')){ showCallNotice(); return; } const attach=ev.target.closest('[data-cv-main-msg-attach]'); if(attach){ const input=q(`[data-cv-main-msg-file-input="${attach.dataset.cvMainMsgAttach}"]`); if(input) input.click(); return; } const th=ev.target.closest('[data-cv-main-msg-thread]'); if(th){ openThread(th.dataset.cvMainMsgThread).catch(err=>showError(err.message||'Could not open that conversation.')); return; } const ub=ev.target.closest('[data-cv-main-msg-user]'); if(ub){ ++threadRequestToken; const found=state.searchResults.find(u=>String(u.id)===String(ub.dataset.cvMainMsgUser)); state.activeThreadId=null; state.activeUser=found||{id:Number(ub.dataset.cvMainMsgUser),name:ub.dataset.cvMainMsgUserName||'User'}; state.messages=[]; state.searchResults=[]; state.searchTerm=''; state.attachment=null; state.draft=''; state.error=''; render({focus:true}); return; } };
     holder.addEventListener('click', handleMessengerClick);
     panelPortal.addEventListener('click', handleMessengerClick);
     const handleMessengerKeydown = ev=>{ if(ev.key==='Escape' && state.open){ state.open=false; render(); return; } if(!ev.target.matches('[data-cv-main-msg-body]')) return; if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); const form=ev.target.closest('[data-cv-main-msg-form]'); if(form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', {cancelable:true, bubbles:true})); } };
     holder.addEventListener('keydown', handleMessengerKeydown);
     panelPortal.addEventListener('keydown', handleMessengerKeydown);
-    const handleMessengerSubmit = ev=>{ if(!ev.target.matches('[data-cv-main-msg-form]')) return; ev.preventDefault(); if(state.sending) return; const input=q('[data-cv-main-msg-body]'); const value=input?input.value:''; const attachment=state.attachment; if(!value.trim()&&!attachment) return; state.sending=true; updateSendState(); send(value, attachment).then(()=>{ state.sending=false; state.attachment=null; state.error=''; render(); }).catch(err=>{ state.sending=false; showError(err.message||'Could not send message.'); const fresh=q('[data-cv-main-msg-body]'); if(fresh){ fresh.value=value; fresh.focus(); syncComposerHeight(document); updateSendState(); } }); };
+    const handleMessengerSubmit = ev=>{
+        if(!ev.target.matches('[data-cv-main-msg-form]')) return; ev.preventDefault(); if(state.sending) return;
+        const input=q('[data-cv-main-msg-body]'); const value=input?input.value:state.draft; const attachment=state.attachment;
+        if(!value.trim()&&!attachment) return;
+        const optimisticId='pending-'+Date.now();
+        state.sending=true; state.draft=''; state.attachment=null; state.error='';
+        state.messages.push({id:optimisticId,mine:true,body:value.trim(),attachment:cleanAttachment(attachment),created_at:new Date().toISOString(),pending:true});
+        render({focus:true});
+        send(value, attachment).then(threadId=>{
+            state.sending=false; state.activeThreadId=threadId||state.activeThreadId;
+            return api(`/social/messages/threads/${state.activeThreadId}`);
+        }).then(d=>{
+            state.messages=d.items||[]; state.activeUser=d.other_user||state.activeUser; state.error=''; render({focus:true});
+            return load({preserveScroll:true});
+        }).catch(err=>{
+            state.sending=false; state.messages=state.messages.filter(m=>m.id!==optimisticId); state.draft=value; state.attachment=attachment;
+            showError(err.message||'Could not send message. Please try again.');
+        });
+    };
     holder.addEventListener('submit', handleMessengerSubmit);
     panelPortal.addEventListener('submit', handleMessengerSubmit);
     document.addEventListener('click', ev=>{ if(!state.open) return; if(holder.contains(ev.target)||panelPortal.contains(ev.target)) return; state.open=false; render(); });
     document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && state.open){ state.open=false; render(); } });
-    render(); load().catch(()=>{});
+    render(); load().catch(()=>{ state.loadingThreads=false; render(); });
     // POLLING (v5.5.190): skip the network call when the tab is hidden or the
     // user isn't logged in. Avoids running every 30s in background tabs.
     setInterval(function(){
         if (typeof document !== 'undefined' && document.hidden) return;
         if (!isLoggedIn()) return;
-        load().catch(()=>{});
-    }, 30000);
+        if(state.open&&state.activeThreadId&&!state.sending){
+            const activeId=state.activeThreadId;
+            Promise.all([api(`/social/messages/threads/${activeId}`),api('/social/messages/threads')]).then(function(results){
+                if(String(state.activeThreadId)!==String(activeId)) return;
+                const incoming=results[0].items||[];
+                const previousIds=state.messages.filter(m=>!m.pending).map(m=>m.id).join('|');
+                const nextIds=incoming.map(m=>m.id).join('|');
+                state.conversations=results[1].items||[];
+                if(previousIds!==nextIds){ state.messages=incoming; state.activeUser=results[0].other_user||state.activeUser; render({preserveScroll:true}); }
+                else render({preserveScroll:true});
+            }).catch(()=>{});
+            return;
+        }
+        load({preserveScroll:true}).catch(()=>{});
+    }, 12000);
 }());
 
 /* Social feed all-notifications integrated into the main nav */
