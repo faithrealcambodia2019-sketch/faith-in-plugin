@@ -1,0 +1,711 @@
+/*
+ * Styles for the public marketing pages.
+ *
+ * Deliberately self-contained: these pages must not depend on the Tailwind CDN,
+ * jQuery, or the large application stylesheets, so that the pages Google and
+ * first-time visitors see are fast and render without JavaScript.
+ */
+
+.fi {
+  --fi-ink: #14142b;
+  --fi-ink-soft: #4a4a68;
+  --fi-ink-faint: #71718f;
+  --fi-line: #e6e6f2;
+  --fi-line-soft: #f1f1f8;
+  --fi-bg: #ffffff;
+  --fi-bg-tint: #f8f8fd;
+  --fi-brand: #4f46e5;
+  --fi-brand-dark: #4338ca;
+  --fi-accent: #7c3aed;
+  --fi-radius: 14px;
+  --fi-radius-lg: 22px;
+  --fi-shadow: 0 1px 2px rgba(20, 20, 43, 0.04), 0 8px 24px rgba(20, 20, 43, 0.06);
+  --fi-max: 1140px;
+
+  background: var(--fi-bg);
+  color: var(--fi-ink);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.fi *,
+.fi *::before,
+.fi *::after {
+  box-sizing: border-box;
+}
+
+.fi :lang(km),
+.fi .fi-km {
+  font-family: var(--font-koh-santepheap), var(--font-inter), sans-serif;
+  line-height: 2;
+}
+
+.fi h1,
+.fi h2,
+.fi h3,
+.fi h4 {
+  margin: 0;
+  color: var(--fi-ink);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.fi h1 {
+  font-family: var(--font-poppins), var(--font-inter), sans-serif;
+  font-size: clamp(2.4rem, 5.2vw, 3.9rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.fi h2 {
+  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+}
+
+.fi h3 {
+  font-size: 1.18rem;
+  letter-spacing: -0.01em;
+}
+
+.fi p {
+  margin: 0;
+  color: var(--fi-ink-soft);
+}
+
+.fi a {
+  color: var(--fi-brand);
+  text-decoration: none;
+}
+
+.fi a:hover {
+  text-decoration: underline;
+}
+
+.fi ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fi-shell {
+  margin: 0 auto;
+  max-width: var(--fi-max);
+  padding: 0 24px;
+  width: 100%;
+}
+
+.fi-section {
+  padding: clamp(56px, 8vw, 96px) 0;
+}
+
+.fi-section--tint {
+  background: var(--fi-bg-tint);
+  border-block: 1px solid var(--fi-line-soft);
+}
+
+/* ---------- Header ---------- */
+
+.fi-header {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--fi-line-soft);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.fi-header__inner {
+  align-items: center;
+  display: flex;
+  gap: 28px;
+  height: 66px;
+  justify-content: space-between;
+}
+
+.fi-logo {
+  color: var(--fi-ink);
+  font-family: var(--font-poppins), sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+}
+
+.fi-logo:hover {
+  text-decoration: none;
+}
+
+.fi-logo span:first-child {
+  color: var(--fi-brand);
+}
+
+.fi-logo span:last-child {
+  color: var(--fi-accent);
+}
+
+.fi-nav {
+  align-items: center;
+  display: flex;
+  gap: 26px;
+}
+
+.fi-nav a {
+  color: var(--fi-ink-soft);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.fi-nav a:hover {
+  color: var(--fi-ink);
+  text-decoration: none;
+}
+
+.fi-header__actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .fi-nav {
+    display: none;
+  }
+}
+
+/* ---------- Buttons ---------- */
+
+.fi-btn {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.97rem;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  padding: 11px 20px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+
+.fi-btn:hover {
+  text-decoration: none;
+}
+
+/*
+ * Buttons are usually rendered as <a>, and `.fi a` sets a link colour with
+ * specificity (0,1,1). These modifiers are therefore scoped under `.fi` to
+ * reach (0,2,0) — otherwise the link colour wins and a primary button renders
+ * indigo text on an indigo background.
+ */
+.fi .fi-btn--primary {
+  background: var(--fi-brand);
+  color: #fff;
+}
+
+.fi .fi-btn--primary:hover {
+  background: var(--fi-brand-dark);
+}
+
+.fi .fi-btn--ghost {
+  background: #fff;
+  border-color: var(--fi-line);
+  color: var(--fi-ink);
+}
+
+.fi .fi-btn--ghost:hover {
+  border-color: #cfcfe4;
+}
+
+.fi-btn--lg {
+  font-size: 1.03rem;
+  padding: 14px 26px;
+}
+
+.fi .fi-btn--quiet {
+  color: var(--fi-ink-soft);
+  font-weight: 500;
+  padding: 11px 8px;
+}
+
+.fi .fi-btn--quiet:hover {
+  color: var(--fi-ink);
+}
+
+/* ---------- Hero ---------- */
+
+.fi-hero {
+  overflow: hidden;
+  padding: clamp(56px, 8vw, 104px) 0 clamp(48px, 7vw, 88px);
+  position: relative;
+}
+
+.fi-hero::before {
+  background: radial-gradient(1000px 460px at 76% -8%, rgba(124, 58, 237, 0.13), transparent 62%),
+    radial-gradient(760px 380px at 8% 4%, rgba(79, 70, 229, 0.1), transparent 60%);
+  content: "";
+  inset: 0;
+  position: absolute;
+  z-index: 0;
+}
+
+.fi-hero__inner {
+  align-items: center;
+  display: grid;
+  gap: clamp(36px, 5vw, 64px);
+  grid-template-columns: 1.08fr 0.92fr;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 940px) {
+  .fi-hero__inner {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fi-eyebrow {
+  align-items: center;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.16);
+  border-radius: 999px;
+  color: var(--fi-brand-dark);
+  display: inline-flex;
+  font-size: 0.83rem;
+  font-weight: 600;
+  gap: 8px;
+  letter-spacing: 0.01em;
+  margin-bottom: 22px;
+  padding: 6px 14px;
+}
+
+.fi-hero h1 .fi-hl {
+  background: linear-gradient(96deg, var(--fi-brand) 4%, var(--fi-accent) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fi-hero__lede {
+  font-size: clamp(1.06rem, 1.6vw, 1.2rem);
+  margin-top: 22px;
+  max-width: 34em;
+}
+
+.fi-hero__verse {
+  color: var(--fi-ink-faint);
+  font-size: 0.98rem;
+  margin-top: 18px;
+}
+
+.fi-hero__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.fi-hero__note {
+  color: var(--fi-ink-faint);
+  font-size: 0.88rem;
+  margin-top: 16px;
+}
+
+/* ---------- Hero card ---------- */
+
+.fi-preview {
+  background: #fff;
+  border: 1px solid var(--fi-line);
+  border-radius: var(--fi-radius-lg);
+  box-shadow: 0 2px 4px rgba(20, 20, 43, 0.04), 0 24px 60px rgba(20, 20, 43, 0.12);
+  overflow: hidden;
+}
+
+.fi-preview__bar {
+  align-items: center;
+  background: var(--fi-bg-tint);
+  border-bottom: 1px solid var(--fi-line-soft);
+  display: flex;
+  gap: 6px;
+  padding: 12px 16px;
+}
+
+.fi-preview__dot {
+  background: #d8d8e8;
+  border-radius: 50%;
+  height: 9px;
+  width: 9px;
+}
+
+.fi-preview__body {
+  padding: 22px;
+}
+
+.fi-verse-row {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 520px) {
+  .fi-verse-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fi-verse-col {
+  background: var(--fi-bg-tint);
+  border: 1px solid var(--fi-line-soft);
+  border-radius: var(--fi-radius);
+  padding: 16px;
+}
+
+.fi-verse-col h4 {
+  color: var(--fi-ink-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.fi-verse-col p {
+  color: var(--fi-ink);
+  font-size: 0.94rem;
+}
+
+.fi-verse-col cite {
+  color: var(--fi-ink-faint);
+  display: block;
+  font-size: 0.82rem;
+  font-style: normal;
+  margin-top: 10px;
+}
+
+.fi-preview__foot {
+  border-top: 1px solid var(--fi-line-soft);
+  color: var(--fi-ink-faint);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+  gap: 8px 18px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+/* ---------- Generic grids ---------- */
+
+.fi-head {
+  margin: 0 auto clamp(36px, 5vw, 56px);
+  max-width: 42em;
+  text-align: center;
+}
+
+.fi-head p {
+  font-size: 1.06rem;
+  margin-top: 16px;
+}
+
+.fi-head--left {
+  margin-inline: 0;
+  text-align: left;
+}
+
+.fi-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+}
+
+.fi-card {
+  background: #fff;
+  border: 1px solid var(--fi-line);
+  border-radius: var(--fi-radius-lg);
+  padding: 26px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fi-card:hover {
+  border-color: #d5d5ec;
+  box-shadow: var(--fi-shadow);
+}
+
+.fi-card h3 {
+  margin-bottom: 10px;
+}
+
+.fi-card__km {
+  color: var(--fi-brand);
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.fi-card p {
+  font-size: 0.96rem;
+}
+
+.fi-card__more {
+  color: var(--fi-ink-soft);
+  font-size: 0.94rem;
+  margin-top: 14px;
+}
+
+/* ---------- Stats ---------- */
+
+.fi-stats {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  text-align: center;
+}
+
+.fi-stat strong {
+  color: var(--fi-brand);
+  display: block;
+  font-family: var(--font-poppins), sans-serif;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.fi-stat span {
+  color: var(--fi-ink-soft);
+  display: block;
+  font-size: 0.95rem;
+  margin-top: 10px;
+}
+
+/* ---------- Audience ---------- */
+
+.fi-aud {
+  background: #fff;
+  border: 1px solid var(--fi-line);
+  border-radius: var(--fi-radius-lg);
+  padding: 30px;
+}
+
+.fi-aud h3 {
+  font-size: 1.28rem;
+}
+
+.fi-aud > p {
+  margin-top: 8px;
+}
+
+.fi-aud ul {
+  margin-top: 20px;
+}
+
+.fi-aud li {
+  color: var(--fi-ink-soft);
+  font-size: 0.96rem;
+  padding: 8px 0 8px 28px;
+  position: relative;
+}
+
+.fi-aud li::before {
+  color: var(--fi-brand);
+  content: "✓";
+  font-weight: 700;
+  left: 4px;
+  position: absolute;
+}
+
+/* ---------- Prose (about / legal) ---------- */
+
+.fi-prose {
+  margin: 0 auto;
+  max-width: 44em;
+}
+
+.fi-prose h2 {
+  font-size: 1.5rem;
+  margin-top: 44px;
+}
+
+.fi-prose h3 {
+  margin-top: 30px;
+}
+
+.fi-prose p,
+.fi-prose li {
+  color: var(--fi-ink-soft);
+  margin-top: 16px;
+}
+
+.fi-prose ul {
+  list-style: disc;
+  padding-left: 22px;
+}
+
+.fi-prose li {
+  margin-top: 8px;
+}
+
+.fi-prose__meta {
+  color: var(--fi-ink-faint);
+  font-size: 0.9rem;
+}
+
+/* ---------- FAQ ---------- */
+
+.fi-faq {
+  margin: 0 auto;
+  max-width: 44em;
+}
+
+.fi-faq details {
+  border-bottom: 1px solid var(--fi-line);
+  padding: 20px 0;
+}
+
+.fi-faq summary {
+  color: var(--fi-ink);
+  cursor: pointer;
+  font-size: 1.04rem;
+  font-weight: 600;
+  list-style: none;
+  padding-right: 28px;
+  position: relative;
+}
+
+.fi-faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.fi-faq summary::after {
+  color: var(--fi-ink-faint);
+  content: "+";
+  font-size: 1.4rem;
+  font-weight: 400;
+  line-height: 1;
+  position: absolute;
+  right: 0;
+  top: 2px;
+}
+
+.fi-faq details[open] summary::after {
+  content: "−";
+}
+
+.fi-faq details p {
+  font-size: 0.98rem;
+  margin-top: 12px;
+}
+
+/* ---------- CTA band ---------- */
+
+.fi-cta {
+  background: linear-gradient(112deg, var(--fi-brand) 0%, var(--fi-accent) 100%);
+  border-radius: var(--fi-radius-lg);
+  color: #fff;
+  padding: clamp(40px, 6vw, 64px);
+  text-align: center;
+}
+
+.fi-cta h2 {
+  color: #fff;
+}
+
+.fi-cta p {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.06rem;
+  margin: 16px auto 0;
+  max-width: 34em;
+}
+
+.fi .fi-cta .fi-btn {
+  background: #fff;
+  color: var(--fi-brand-dark);
+  margin-top: 30px;
+}
+
+.fi .fi-cta .fi-btn:hover {
+  background: #f2f2ff;
+}
+
+/* ---------- Footer ---------- */
+
+.fi-footer {
+  background: var(--fi-bg-tint);
+  border-top: 1px solid var(--fi-line-soft);
+  padding: 56px 0 36px;
+}
+
+.fi-footer__grid {
+  display: grid;
+  gap: 36px;
+  grid-template-columns: 1.6fr repeat(3, 1fr);
+}
+
+@media (max-width: 820px) {
+  .fi-footer__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.fi-footer__about p {
+  font-size: 0.94rem;
+  margin-top: 14px;
+  max-width: 30em;
+}
+
+.fi-footer h4 {
+  color: var(--fi-ink);
+  font-size: 0.83rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+
+.fi-footer li {
+  margin-bottom: 10px;
+}
+
+.fi-footer li a {
+  color: var(--fi-ink-soft);
+  font-size: 0.94rem;
+}
+
+.fi-footer li a:hover {
+  color: var(--fi-brand);
+}
+
+.fi-footer__base {
+  border-top: 1px solid var(--fi-line);
+  color: var(--fi-ink-faint);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+  gap: 10px 20px;
+  justify-content: space-between;
+  margin-top: 44px;
+  padding-top: 26px;
+}
+
+/* ---------- Contact ---------- */
+
+.fi-contact {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.fi-contact a {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fi * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

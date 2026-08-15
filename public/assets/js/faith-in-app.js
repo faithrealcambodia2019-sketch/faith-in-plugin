@@ -848,7 +848,7 @@ function renderUnifiedAuthCard() {
             <section class="cv-auth-dream__left" aria-label="Faith In welcome">
                 <div class="cv-auth-dream__hero">
                     <h1>Explore <br />the community <br /><span>you belong to.</span></h1>
-                    <p>Your premier Christian post resource. Connect with friends, family, and communities that share your faith and values.</p>
+                    <p>Read the Khmer Bible beside KJV, NIV and ESV. Share posts, blessings and prayer with a community that shares your faith.</p>
                 </div>
                 <div class="cv-auth-dream__collage" aria-hidden="true">
                     <div class="cv-auth-dream__card cv-auth-dream__card--orange">
@@ -877,7 +877,10 @@ function renderUnifiedAuthCard() {
                     <div class="cv-auth-dream__heart"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.4-9.3-8.3C.7 9.2 2.6 5 6.5 5c2.1 0 3.5 1.2 4.2 2.2C11.5 6.2 12.9 5 15 5c3.9 0 5.8 4.2 3.8 7.7C16.5 16.6 12 21 12 21z" fill="currentColor"/></svg></div>
                     <div class="cv-auth-dream__pill"><svg viewBox="0 0 24 24"><path d="M12 2l1.7 5.2L19 9l-5.3 1.8L12 16l-1.7-5.2L5 9l5.3-1.8L12 2z" fill="currentColor"/></svg><span>16:45</span></div>
                 </div>
-                <p class="cv-auth-dream__copyright">© 2026 Faith In Inc.</p>
+                <p class="cv-auth-dream__copyright">
+                    <a href="/">Home</a> · <a href="/about">About</a> · <a href="/bible-study">Bible Study</a> · <a href="/for-churches">For Churches</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/contact">Contact</a>
+                    <br />© ${new Date().getFullYear()} Faith In Inc.
+                </p>
             </section>
             <section class="cv-auth-dream__right" aria-label="Faith In ${isSignup ? 'sign up' : 'login'} form">
                 <div class="cv-auth-dream__panel">
@@ -911,7 +914,7 @@ function renderUnifiedAuthCard() {
                                     <input id="cv-auth-password" type="password" value="${passwordValue}" placeholder="New password" autocomplete="${passwordAutocomplete}" oninput="cvUpdateAuthField('authPassword', this.value)" aria-invalid="${errors.password ? 'true' : 'false'}" aria-describedby="${errors.password ? 'cv-auth-password-error' : ''}" />
                                     ${errors.password ? `<p id="cv-auth-password-error" class="cv-auth-dream__error">${escapeHtml(errors.password)}</p>` : ''}
                                 </div>
-                                <p class="cv-auth-dream__terms">By clicking Sign Up, you agree to our Terms, Privacy Policy and Cookies Policy. You may receive SMS notifications from us and can opt out at any time.</p>
+                                <p class="cv-auth-dream__terms">By clicking Sign Up, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>. You may receive notifications from us and can opt out at any time.</p>
                                 <button type="submit" class="cv-auth-dream__submit cv-auth-dream__submit--square" ${buttonDisabled}>${submitText}</button>
                             </form>
                             <div class="cv-auth-dream__switch-center cv-auth-dream__switch-center--signup-only">
@@ -1129,14 +1132,27 @@ function renderGoogleButtonIfNeeded() {
     }
     target.removeAttribute('hidden');
     target.style.removeProperty('display');
+    const googleDivider = target.parentElement ? target.parentElement.querySelector('.cv-auth-dream__divider') : null;
+    if (googleDivider) {
+        googleDivider.removeAttribute('hidden');
+        googleDivider.style.removeProperty('display');
+    }
     const clientId = cvGoogleClientId();
     if (!clientId) {
-        const origin = (typeof cv_ajax !== 'undefined' && cv_ajax.auth && cv_ajax.auth.site_origin) ? String(cv_ajax.auth.site_origin) : window.location.origin;
-        target.innerHTML = '<div class="cv-google-oauth-setup rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Google login needs setup in Settings &gt; Faith In. Use email login now, or add your Google OAuth Client ID with origin: <code>' + escapeHtml(origin) + '</code></div>';
+        // No Google Identity Services client ID is configured — but one is not
+        // needed. Firebase Authentication's GoogleAuthProvider runs the whole
+        // OAuth flow itself using the OAuth client Firebase creates when Google
+        // is enabled as a sign-in provider. So render our own button wired to
+        // startFirebaseGoogleSignIn() rather than hiding the option.
+        //
+        // Requirement: in the Firebase console, enable Authentication →
+        // Sign-in method → Google, and add faithin.co under Authorized domains.
+        target.innerHTML = cvFirebaseGoogleButtonHtml();
         return;
     }
 
-    // Always use the official Google Identity Services button. Do not use the
+    // A GIS client ID is configured, so use the official Google Identity
+    // Services button instead. Do not use the
     // old google.accounts.id.prompt() fallback because it hangs on mobile and
     // leaves the button at "Opening Google...".
     if (cvInitializeGoogleIdentity() && cvRenderNativeGoogleButton(target)) {
@@ -1269,7 +1285,9 @@ function cvFirebaseErrorMessage(error) {
             return 'Google sign-in needs this domain added in Firebase. Add ' + cvCurrentSiteDomain() + ' under Firebase Authentication > Settings > Authorized domains, then refresh.';
         case 'auth/configuration-not-found':
         case 'auth/operation-not-allowed':
-            return 'This Firebase sign-in method is not enabled yet.';
+            // Almost always means Google has not been switched on as a sign-in
+            // provider in the Firebase console.
+            return 'Google sign-in is not enabled for this project yet. Enable it in Firebase Console > Authentication > Sign-in method > Google, then refresh.';
         case 'permission-denied':
         case 'firestore/permission-denied':
             return 'Your account was created, but Firestore blocked saving the profile. Check the users/{uid} Firestore rule and try logging in.';
@@ -1533,6 +1551,31 @@ window.startFirebaseGoogleSignIn = (event) => {
             window.showToast('Signed in with Google.', 'success');
         })
         .catch(function(error) {
+            const code = (error && error.code) ? String(error.code) : '';
+
+            // The member closed the popup, or a second popup superseded the
+            // first. Neither is an error worth showing them.
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+                return;
+            }
+
+            // Popups are blocked (common on in-app browsers and iOS). Fall back
+            // to the full-page redirect flow, which cvRestoreFirebaseSession()
+            // picks up via onAuthStateChanged when the browser comes back.
+            if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                window.showToast('Opening Google sign-in...', 'info');
+                cvGetFirebaseAuthBundle()
+                    .then(function(bundle) {
+                        const provider = new bundle.authModule.GoogleAuthProvider();
+                        provider.setCustomParameters({ prompt: 'select_account' });
+                        return bundle.authModule.signInWithRedirect(bundle.auth, provider);
+                    })
+                    .catch(function(redirectError) {
+                        window.showToast(cvFirebaseErrorMessage(redirectError), 'error');
+                    });
+                return;
+            }
+
             window.showToast(cvFirebaseErrorMessage(error), 'error');
         })
         .finally(function() {

@@ -6108,3 +6108,36 @@ html body #cv-root .cv-react-exact-ui .cv-feed-msg-error button {
         font-size: 11px !important;
     }
 }
+
+/* ------------------------------------------------------------------
+ * Auth screen trust links (added with the public marketing pages).
+ * Gives the login screen real links to About, Privacy, Terms and
+ * Contact instead of a bare copyright line.
+ * ------------------------------------------------------------------ */
+
+.cv-auth-dream__copyright {
+    color: #6b7280;
+    font-size: 12.5px;
+    line-height: 2;
+}
+
+.cv-auth-dream__copyright a {
+    color: #6b7280;
+    text-decoration: none;
+}
+
+.cv-auth-dream__copyright a:hover,
+.cv-auth-dream__copyright a:focus-visible {
+    color: #4f46e5;
+    text-decoration: underline;
+}
+
+.cv-auth-dream__terms a {
+    color: #4f46e5;
+    text-decoration: none;
+}
+
+.cv-auth-dream__terms a:hover,
+.cv-auth-dream__terms a:focus-visible {
+    text-decoration: underline;
+}

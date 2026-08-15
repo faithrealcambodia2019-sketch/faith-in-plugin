@@ -40,7 +40,10 @@ export const browserRuntimeConfig = Object.freeze({
   auth: {
     mode: "firebase",
     backend_mode: "firebase",
-    google_client_id: "",
+    // When empty, the Google sign-in option is hidden rather than showing setup
+    // instructions to visitors. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in Vercel and
+    // add https://faithin.co as an authorised JavaScript origin to enable it.
+    google_client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
     allowed_domain: siteConfig.domain,
     magic_link_enabled: false,
     firebase_config: firebasePublicConfig,
