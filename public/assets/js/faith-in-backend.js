@@ -247,6 +247,28 @@
         );
     }
 
+    // Transitional compatibility for the safe two-phase rollout. Before the
+    // new rules are deployed, /publicProfiles is denied and the existing
+    // signed-in directory still lives in /users. After the rules deploy, the
+    // public query succeeds and the private /users fallback is never used.
+    function getMemberSnapshot(b) {
+        var publicQuery = b.dbMod.query(b.dbMod.collection(b.db, 'publicProfiles'), b.dbMod.limit(200));
+        return b.dbMod.getDocs(publicQuery).catch(function () {
+            var legacyQuery = b.dbMod.query(b.dbMod.collection(b.db, 'users'), b.dbMod.limit(200));
+            return b.dbMod.getDocs(legacyQuery);
+        });
+    }
+
+    function getMemberDocument(b, uid) {
+        var publicRef = b.dbMod.doc(b.db, 'publicProfiles', uid);
+        return b.dbMod.getDoc(publicRef).then(function (snap) {
+            if (snap.exists()) return snap;
+            return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', uid));
+        }).catch(function () {
+            return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', uid));
+        });
+    }
+
     /** Reads the user's profile document, creating it on first sign-in. */
     function loadProfile(b, user) {
         var ref = b.dbMod.doc(b.db, 'users', user.uid);
@@ -1039,8 +1061,7 @@
     function listMembers(b, matcher) {
         return currentUser(b).then(function (user) {
             return followingMap(b, user).then(function (following) {
-                var q = b.dbMod.query(b.dbMod.collection(b.db, 'publicProfiles'), b.dbMod.limit(200));
-                return b.dbMod.getDocs(q).then(function (snap) {
+                return getMemberSnapshot(b).then(function (snap) {
                     var items = [];
                     snap.forEach(function (d) {
                         var data = d.data();
@@ -1080,7 +1101,7 @@
         return requireUser(b).then(function (user) {
             var resolve = targetUid
                 ? Promise.resolve(targetUid)
-                : b.dbMod.getDocs(b.dbMod.query(b.dbMod.collection(b.db, 'publicProfiles'), b.dbMod.limit(200)))
+                : getMemberSnapshot(b)
                     .then(function (snap) {
                         var found = '';
                         snap.forEach(function (d) {
@@ -1125,7 +1146,7 @@
                 if (!uids.length) return { items: [] };
                 return followingMap(b, user).then(function (following) {
                     return Promise.all(uids.map(function (uid) {
-                        return b.dbMod.getDoc(b.dbMod.doc(b.db, 'publicProfiles', uid))
+                        return getMemberDocument(b, uid)
                             .then(function (s) { return s.exists() ? shapeMember(uid, s.data(), user, following) : null; })
                             .catch(function () { return null; });
                     })).then(function (items) {

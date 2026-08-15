@@ -13,7 +13,8 @@ member to query them exposed fields that the directory did not need.
 
 1. Deploy the application code. On each successful login it writes an
    email-free projection to `publicProfiles/{uid}` while leaving `users/{uid}`
-   unchanged.
+   unchanged. Until the new rules allow that projection, sign-in continues and
+   member discovery temporarily falls back to the existing signed-in directory.
 2. Confirm new and returning users have a `publicProfiles/{uid}` document.
 3. Deploy `firestore.rules` and `firestore.indexes.json` together.
 4. Test the member directory with a non-administrator account.

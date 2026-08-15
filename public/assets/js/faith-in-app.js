@@ -1350,7 +1350,13 @@ function cvCreateOrUpdateFirestoreUser(bundle, user, options) {
                 firestore.doc(bundle.db, 'publicProfiles', user.uid),
                 publicData,
                 { merge: true }
-            );
+            ).catch(function() {
+                // The app is deployed before the additive Firestore rules in
+                // the safe rollout. Account sign-in must keep working during
+                // that short compatibility window.
+                console.warn('[Faith In] Public profile sync is pending the database rules update.');
+                return null;
+            });
         });
 }
 
