@@ -137,13 +137,16 @@ html body #cv-root .cv-feed-shortcut.is-active i {
   color: var(--fi-color-brand-blue) !important;
 }
 
-html body #cv-root .cv-react-fb-composer .cv-feed-compose-action i,
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action :is(i, svg),
 html body #cv-root .cv-react-fb-composer .cv-feed-compose-action .cv-blessing-svg-icon {
   color: var(--fi-color-brand-blue) !important;
 }
 
-html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--photo i,
-html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--article i {
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--photo :is(i, svg) {
+  color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--article :is(i, svg) {
   color: var(--fi-color-accent) !important;
 }
 
