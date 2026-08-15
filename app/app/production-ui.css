@@ -876,6 +876,10 @@ html body #cv-root .cv-react-wordmark {
   letter-spacing: -0.055em !important;
 }
 
+html body #cv-root .cv-react-logo-in {
+  margin-left: 0.1em !important;
+}
+
 html body #cv-root .cv-react-social-search {
   width: min(100%, 340px) !important;
   height: 42px !important;
@@ -1262,6 +1266,35 @@ html body #cv-root .cv-ui-contact-avatar {
   flex-basis: 42px !important;
 }
 
+html body #cv-root .cv-ui-contact-message {
+  min-height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  margin-top: 5px !important;
+  padding: 0 10px !important;
+  border: 1px solid #dedcff !important;
+  border-radius: 9px !important;
+  background: #f8f7ff !important;
+  color: #4f46e5 !important;
+  font-size: 10px !important;
+  font-weight: 760 !important;
+}
+
+html body #cv-root .cv-ui-contact-message:hover {
+  border-color: #c7c2ff !important;
+  background: #efeeff !important;
+}
+
+html body #cv-root .cv-ui-contact-message svg {
+  width: 13px !important;
+  height: 13px !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-linkedin-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
 html body #cv-root .cv-ui-rail-footer {
   color: #98a2b3 !important;
   font-size: 11px !important;
@@ -1407,6 +1440,25 @@ html body .dark #cv-root .cv-ui-verse-card {
   html body #cv-root .cv-feed-page-linkedin {
     padding-top: 18px !important;
   }
+
+  html body #cv-root .cv-feed-layout--three-col {
+    width: 100% !important;
+    max-width: 720px !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin: 0 auto !important;
+  }
+
+  html body #cv-root .cv-feed-left-sidebar,
+  html body #cv-root .cv-feed-right-sidebar {
+    display: none !important;
+  }
+
+  html body #cv-root .cv-feed-main-column {
+    width: 100% !important;
+    max-width: 720px !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1474,6 +1526,15 @@ html body .dark #cv-root .cv-ui-verse-card {
   html body #cv-root .cv-react-post-card .cv-reaction-trigger {
     gap: 6px !important;
     font-size: 13px !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-linkedin-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-linkedin-action,
+  html body #cv-root .cv-react-post-card .cv-reaction-trigger {
+    gap: 4px !important;
   }
 
   html body #cv-root .cv-mobile-bottom-nav {

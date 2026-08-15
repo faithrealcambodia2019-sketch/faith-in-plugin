@@ -5045,9 +5045,17 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     function cvGetBlessingStoryImage(post) {
         if (!post) return '';
         const mediaItems = Array.isArray(post.media_items) ? post.media_items : [];
-        const imageItem = mediaItems.find(item => item && String(item.type || 'image').toLowerCase() === 'image' && (item.url || item.preview_url));
-        if (imageItem) return imageItem.url || imageItem.preview_url || '';
-        return post.cover_media_url || post.cover_image_url || '';
+        const imageItem = mediaItems.find(item => {
+            if (!item || item.is_blessing_music) return false;
+            const url = String(item.url || item.local_url || item.preview_url || '').trim();
+            const type = String(item.type || '').toLowerCase();
+            const mime = String(item.mime || '').toLowerCase();
+            if (!url || type === 'audio' || mime.indexOf('audio/') === 0 || /\.(mp3|m4a|aac|wav|ogg)(?:[?#]|$)/i.test(url)) return false;
+            return type === 'image' || mime.indexOf('image/') === 0 || /\.(jpe?g|png|gif|webp|avif)(?:[?#]|$)/i.test(url);
+        });
+        if (imageItem) return imageItem.url || imageItem.local_url || imageItem.preview_url || '';
+        const cover = String(post.cover_media_url || post.cover_image_url || '').trim();
+        return /\.(mp3|m4a|aac|wav|ogg)(?:[?#]|$)/i.test(cover) ? '' : cover;
     }
 
     function cvGetRecentBlessingStories(limit = 6) {
