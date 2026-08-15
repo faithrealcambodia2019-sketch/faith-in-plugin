@@ -25,6 +25,108 @@
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
+/* Social collection polish: saved posts are a real private feed, not a
+   placeholder action. These styles use the Faith In blue/indigo brand ramp. */
+.cv-react-saved-items.is-active,
+.cv-react-saved-items[aria-pressed="true"] {
+  color: #4338ca !important;
+  background: linear-gradient(135deg, #eef2ff, #f5f3ff) !important;
+}
+
+.cv-react-saved-items strong {
+  margin-left: auto;
+  min-width: 1.5rem;
+  color: #4f46e5;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.cv-saved-feed-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid #dbe4ff;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 58%, #f5f3ff 100%);
+  box-shadow: 0 12px 32px rgba(67, 56, 202, 0.08);
+}
+
+.cv-saved-feed-heading span {
+  color: #4f46e5;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cv-saved-feed-heading h1 {
+  margin: 0.15rem 0 0;
+  color: #172554;
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+}
+
+.cv-saved-feed-heading p {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.cv-saved-feed-heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.6rem;
+  padding: 0 0.9rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 0.8rem;
+  color: #3730a3;
+  background: rgba(255, 255, 255, 0.85);
+  font-weight: 750;
+}
+
+.cv-saved-feed-heading > button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.cv-linkedin-action.cv-post-save-active,
+.cv-linkedin-action.cv-post-save-active:hover {
+  color: #4338ca !important;
+  background: #eef2ff !important;
+}
+
+.cv-post-comment-actions button.is-active {
+  color: #4338ca !important;
+  font-weight: 800 !important;
+}
+
+@media (max-width: 640px) {
+  .cv-saved-feed-heading {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+
+  .cv-saved-feed-heading > button span {
+    display: none;
+  }
+
+  .cv-saved-feed-heading > button {
+    width: 2.6rem;
+    padding: 0;
+    justify-content: center;
+    flex: 0 0 2.6rem;
+  }
+
+  .cv-linkedin-actions .cv-linkedin-action {
+    min-width: 0;
+  }
+}
+
 .dark #cv-root {
   --fi-color-ink: #f8fafc;
   --fi-color-muted: #cbd5e1;

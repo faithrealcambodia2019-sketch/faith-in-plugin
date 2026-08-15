@@ -199,6 +199,11 @@
         return null;
     }
 
+    function isoTime(value) {
+        var date = toDate(value);
+        return date ? date.toISOString() : '';
+    }
+
     function profileFor(user, doc) {
         var data = doc || {};
         var email = text(user.email || data.email);
@@ -641,6 +646,18 @@
                 update['reactions.' + user.uid] = removing ? b.dbMod.deleteField() : reaction;
 
                 return b.dbMod.updateDoc(ref, update).then(function () {
+                    var postData = snap.data() || {};
+                    if (!removing && postData.authorUid && postData.authorUid !== user.uid) {
+                        loadProfile(b, user).then(function (profile) {
+                            return createNotification(b, {
+                                recipientUid: postData.authorUid,
+                                actor: profile,
+                                type: 'reaction',
+                                objectId: id,
+                                objectType: 'post'
+                            });
+                        }).catch(function () {});
+                    }
                     return {
                         id: id,
                         likes: count,
@@ -653,33 +670,113 @@
         });
     };
 
-    actions.cv_create_post_comment = function (b, params) {
+    actions.cv_create_post_comment = function (b, params, files, onProgress) {
         var id = text(params.post_id || params.id);
         var body = text(params.comment || params.content || params.text, 2000);
         if (!id) throw new Error('That post could not be found.');
-        if (!body) throw new Error('Write a comment first.');
+        var imageFiles = files.comment_image || [];
+        if (!body && !imageFiles.length) throw new Error('Write a comment or add an image first.');
 
         return requireUser(b).then(function (user) {
-            return loadProfile(b, user).then(function (profile) {
+            return Promise.all([
+                loadProfile(b, user),
+                b.dbMod.getDoc(b.dbMod.doc(b.db, 'posts', id)),
+                uploadAll(b, user, imageFiles.slice(0, 1), onProgress)
+            ]).then(function (results) {
+                var profile = results[0];
+                var postSnap = results[1];
+                var uploaded = results[2];
+                if (!postSnap.exists()) throw new Error('That post is no longer available.');
+                var mediaUrl = uploaded.length ? uploaded[0].url : '';
                 var comment = {
                     authorUid: user.uid,
                     author: { uid: user.uid, appUserId: profile.id, name: profile.name, avatar_url: profile.avatar_url },
                     content: body,
+                    media_url: mediaUrl,
+                    reactions: {},
                     createdAt: b.dbMod.serverTimestamp()
                 };
                 return b.dbMod.addDoc(b.dbMod.collection(b.db, 'posts', id, 'comments'), comment).then(function (ref) {
-                    b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), {
+                    return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), {
                         comment_count: b.dbMod.increment(1)
-                    }).catch(function () {});
-                    return {
-                        id: ref.id,
-                        comment: {
-                            id: ref.id,
-                            content: body,
-                            time: 'just now',
-                            author: comment.author
+                    }).then(function () {
+                        var postData = postSnap.data() || {};
+                        var recipientUid = text(postData.authorUid);
+                        if (recipientUid && recipientUid !== user.uid) {
+                            createNotification(b, {
+                                recipientUid: recipientUid,
+                                actor: profile,
+                                type: 'comment',
+                                objectId: id,
+                                objectType: 'post'
+                            }).catch(function () {});
                         }
-                    };
+                        return {
+                            id: ref.id,
+                            comment_count: parseInt(postData.comment_count || 0, 10) + 1,
+                            comment: {
+                                id: ref.id,
+                                content: body,
+                                media_url: mediaUrl,
+                                reactions: 0,
+                                user_reaction: null,
+                                time: 'just now',
+                                author: comment.author
+                            }
+                        };
+                    });
+                });
+            });
+        });
+    };
+
+    actions.cv_get_post_comments = function (b, params) {
+        var id = text(params.post_id || params.id);
+        if (!id) throw new Error('That post could not be found.');
+        return requireUser(b).then(function (user) {
+            var commentsQuery = b.dbMod.query(
+                b.dbMod.collection(b.db, 'posts', id, 'comments'),
+                b.dbMod.orderBy('createdAt', 'desc'),
+                b.dbMod.limit(30)
+            );
+            return b.dbMod.getDocs(commentsQuery).then(function (snapshot) {
+                var items = [];
+                snapshot.forEach(function (doc) {
+                    var data = doc.data() || {};
+                    var reactions = data.reactions || {};
+                    items.push({
+                        id: doc.id,
+                        content: text(data.content),
+                        media_url: httpsUrl(data.media_url),
+                        time: relativeTime(toDate(data.createdAt)),
+                        created_at: isoTime(data.createdAt),
+                        author: data.author || {},
+                        reactions: Object.keys(reactions).length,
+                        reaction_count: Object.keys(reactions).length,
+                        user_reaction: reactions[user.uid] || null
+                    });
+                });
+                items.reverse();
+                return { items: items };
+            });
+        });
+    };
+
+    actions.cv_toggle_comment_reaction = function (b, params) {
+        var postId = text(params.post_id);
+        var commentId = text(params.comment_id || params.id);
+        if (!postId || !commentId) throw new Error('That comment could not be found.');
+        return requireUser(b).then(function (user) {
+            var ref = b.dbMod.doc(b.db, 'posts', postId, 'comments', commentId);
+            return b.dbMod.getDoc(ref).then(function (snapshot) {
+                if (!snapshot.exists()) throw new Error('That comment is no longer available.');
+                var reactions = snapshot.data().reactions || {};
+                var removing = reactions[user.uid] === 'like';
+                var update = {};
+                update['reactions.' + user.uid] = removing ? b.dbMod.deleteField() : 'like';
+                return b.dbMod.updateDoc(ref, update).then(function () {
+                    var count = Object.keys(reactions).length + (removing ? -1 : 1);
+                    return { post_id: postId, comment_id: commentId, reaction_count: Math.max(0, count), user_reaction: removing ? null : 'like' };
                 });
             });
         });
@@ -697,20 +794,34 @@
     actions.cv_update_profile = function (b, params, files, onProgress) {
         return requireUser(b).then(function (user) {
             var photos = files.profile_image || files.avatar || [];
-            return uploadAll(b, user, photos, onProgress).then(function (uploaded) {
+            var covers = files.profile_cover || files.cover || [];
+            return Promise.all([
+                uploadAll(b, user, photos.slice(0, 1), onProgress),
+                uploadAll(b, user, covers.slice(0, 1), onProgress)
+            ]).then(function (uploads) {
+                var uploadedPhotos = uploads[0];
+                var uploadedCovers = uploads[1];
+                if (uploadedPhotos.length && uploadedPhotos[0].type !== 'image') throw new Error('Choose an image for your profile photo.');
+                if (uploadedCovers.length && uploadedCovers[0].type !== 'image') throw new Error('Choose an image for your cover photo.');
                 var ref = b.dbMod.doc(b.db, 'users', user.uid);
                 // Only the fields firestore.rules permits on update.
                 var update = { updatedAt: b.dbMod.serverTimestamp() };
-                var name = text(params.name || params.profile_name, 120);
+                var name = text(params.display_name || params.name || params.profile_name, 120);
                 if (name) {
                     update.displayName = name;
                     update.firstName = name.split(' ')[0] || name;
                     update.lastName = name.split(' ').slice(1).join(' ');
                 }
-                if (uploaded.length) update.photoURL = uploaded[0].url;
+                ['gender', 'role', 'location', 'industry', 'church', 'ministry'].forEach(function (field) {
+                    if (params[field] !== undefined) update[field] = text(params[field], 200);
+                });
+                if (params.bio !== undefined) update.bio = text(params.bio, 1000);
+                if (uploadedPhotos.length) update.photoURL = uploadedPhotos[0].url;
+                if (uploadedCovers.length) update.coverURL = uploadedCovers[0].url;
 
                 return b.dbMod.updateDoc(ref, update)
-                    .then(function () { return loadProfile(b, user); });
+                    .then(function () { return loadProfile(b, user); })
+                    .then(function (profile) { return Object.assign({}, profile, { user: profile }); });
             });
         });
     };
@@ -734,10 +845,20 @@
         var id = text(params.post_id || params.id);
         if (!id) throw new Error('That post could not be found.');
         return requireUser(b).then(function () {
-            var update = {};
-            update[field] = b.dbMod.increment(1);
-            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), update).then(function () {
-                return { id: id, ok: true };
+            var ref = b.dbMod.doc(b.db, 'posts', id);
+            return b.dbMod.runTransaction(b.db, function (transaction) {
+                return transaction.get(ref).then(function (snapshot) {
+                    if (!snapshot.exists()) throw new Error('That post is no longer available.');
+                    var next = parseInt(snapshot.data()[field] || 0, 10) + 1;
+                    var update = {};
+                    update[field] = next;
+                    transaction.update(ref, update);
+                    return next;
+                });
+            }).then(function (next) {
+                var result = { id: id, ok: true };
+                result[field] = next;
+                return result;
             });
         });
     }
@@ -1165,6 +1286,15 @@
                     targetUid: uid,
                     createdAt: b.dbMod.serverTimestamp()
                 }).then(function () {
+                    loadProfile(b, user).then(function (profile) {
+                        return createNotification(b, {
+                            recipientUid: uid,
+                            actor: profile,
+                            type: 'follow',
+                            objectId: followId(user.uid, uid),
+                            objectType: 'profile'
+                        });
+                    }).catch(function () {});
                     return { following: true, uid: uid, user_id: targetId };
                 });
             });
@@ -1202,6 +1332,317 @@
     actions.cv_social_get_following = function (b) { return followList(b, 'followerUid', 'targetUid'); };
 
     // ---------------------------------------------------------------------
+    // Private messaging and notifications
+    // ---------------------------------------------------------------------
+
+    function compactProfile(profile) {
+        return {
+            uid: text(profile.uid),
+            id: parseInt(profile.id || profile.appUserId || numericId(profile.uid), 10),
+            name: text(profile.name || profile.displayName || 'Faith In Member', 120),
+            avatar_url: text(profile.avatar_url || profile.photoURL, 2048)
+        };
+    }
+
+    function resolveMemberUid(b, value) {
+        var requested = text(value);
+        if (!requested) return Promise.reject(new Error('Choose a member to message.'));
+        return getMemberSnapshot(b).then(function (snapshot) {
+            var uid = '';
+            snapshot.forEach(function (doc) {
+                var data = doc.data() || {};
+                if (!uid && (doc.id === requested || String(data.appUserId || numericId(doc.id)) === requested)) uid = doc.id;
+            });
+            if (!uid) throw new Error('That member could not be found.');
+            return uid;
+        });
+    }
+
+    function directThreadId(firstUid, secondUid) {
+        return [String(firstUid), String(secondUid)].sort().join('__');
+    }
+
+    function safeMessageAttachment(value) {
+        if (!value) return null;
+        var source = value;
+        if (typeof source === 'string') {
+            try { source = JSON.parse(source); } catch (e) { return null; }
+        }
+        if (!source || typeof source !== 'object') return null;
+        var dataUrl = text(source.data_url || source.dataUrl, 720000);
+        if (!/^data:(image\/(?:jpeg|png|gif|webp)|video\/(?:mp4|webm)|application\/(?:pdf|zip));base64,[a-z0-9+/=]+$/i.test(dataUrl)) {
+            throw new Error('That attachment type is not supported.');
+        }
+        return {
+            type: ['image', 'video', 'file'].indexOf(text(source.type).toLowerCase()) !== -1 ? text(source.type).toLowerCase() : 'file',
+            name: text(source.name || 'attachment', 160),
+            data_url: dataUrl
+        };
+    }
+
+    function createNotification(b, input) {
+        var recipientUid = text(input.recipientUid);
+        var actor = compactProfile(input.actor || {});
+        if (!recipientUid || !actor.uid || recipientUid === actor.uid) return Promise.resolve();
+        var type = text(input.type).toLowerCase();
+        var allowed = ['reaction', 'comment', 'reply', 'follow', 'message', 'new_post'];
+        if (allowed.indexOf(type) === -1) return Promise.resolve();
+        var objectId = text(input.objectId, 500);
+        var notificationId = [type, objectId || 'activity', actor.uid].join('__');
+        return b.dbMod.setDoc(b.dbMod.doc(b.db, 'notifications', notificationId), {
+            recipientUid: recipientUid,
+            actorUid: actor.uid,
+            actor: actor,
+            type: type,
+            objectId: objectId,
+            objectType: text(input.objectType || '', 40),
+            isRead: false,
+            createdAt: b.dbMod.serverTimestamp(),
+            readAt: null
+        });
+    }
+
+    function threadUnread(data, uid) {
+        if (!data || data.lastSenderUid === uid) return 0;
+        var last = toDate(data.lastMessageAt);
+        var read = toDate((data.readAt || {})[uid]);
+        return last && (!read || last.getTime() > read.getTime()) ? 1 : 0;
+    }
+
+    function shapeThread(doc, user) {
+        var data = doc.data() || {};
+        var participants = Array.isArray(data.participants) ? data.participants : [];
+        var otherUid = participants.find(function (uid) { return uid !== user.uid; }) || '';
+        var other = (data.participantProfiles || {})[otherUid] || { uid: otherUid, id: numericId(otherUid), name: 'Faith In Member', avatar_url: '' };
+        return {
+            id: doc.id,
+            other_user: compactProfile(other),
+            last_message: text(data.lastMessage, 500),
+            last_message_at: isoTime(data.lastMessageAt || data.updatedAt),
+            updated_at: isoTime(data.updatedAt),
+            unread_count: threadUnread(data, user.uid)
+        };
+    }
+
+    actions.cv_social_get_message_threads = function (b) {
+        return requireUser(b).then(function (user) {
+            var threadsQuery = b.dbMod.query(
+                b.dbMod.collection(b.db, 'messageThreads'),
+                b.dbMod.where('participants', 'array-contains', user.uid),
+                b.dbMod.limit(100)
+            );
+            return b.dbMod.getDocs(threadsQuery).then(function (snapshot) {
+                var items = [];
+                snapshot.forEach(function (doc) { items.push(shapeThread(doc, user)); });
+                items.sort(function (a, c) { return String(c.updated_at || '').localeCompare(String(a.updated_at || '')); });
+                return { items: items };
+            });
+        });
+    };
+
+    actions.cv_social_get_message_thread = function (b, params) {
+        var id = text(params.thread_id || params.id);
+        if (!id) throw new Error('That conversation could not be found.');
+        return requireUser(b).then(function (user) {
+            var threadRef = b.dbMod.doc(b.db, 'messageThreads', id);
+            return b.dbMod.getDoc(threadRef).then(function (threadSnap) {
+                if (!threadSnap.exists()) throw new Error('That conversation is no longer available.');
+                var threadData = threadSnap.data() || {};
+                var participants = Array.isArray(threadData.participants) ? threadData.participants : [];
+                if (participants.indexOf(user.uid) === -1) throw new Error('You do not have permission to open that conversation.');
+                var otherUid = participants.find(function (uid) { return uid !== user.uid; }) || '';
+                var other = (threadData.participantProfiles || {})[otherUid] || { uid: otherUid, id: numericId(otherUid), name: 'Faith In Member' };
+                var messagesQuery = b.dbMod.query(
+                    b.dbMod.collection(b.db, 'messageThreads', id, 'messages'),
+                    b.dbMod.orderBy('createdAt', 'asc'),
+                    b.dbMod.limit(200)
+                );
+                return b.dbMod.getDocs(messagesQuery).then(function (snapshot) {
+                    var items = [];
+                    snapshot.forEach(function (doc) {
+                        var data = doc.data() || {};
+                        items.push({
+                            id: doc.id,
+                            body: text(data.body, 4000),
+                            attachment: data.attachment || null,
+                            mine: data.authorUid === user.uid,
+                            created_at: isoTime(data.createdAt)
+                        });
+                    });
+                    var readUpdate = {};
+                    readUpdate['readAt.' + user.uid] = b.dbMod.serverTimestamp();
+                    return b.dbMod.updateDoc(threadRef, readUpdate).catch(function () {}).then(function () {
+                        return { items: items, other_user: compactProfile(other), thread_id: id };
+                    });
+                });
+            });
+        });
+    };
+
+    actions.cv_social_send_message = function (b, params) {
+        var body = text(params.body, 4000);
+        var attachment = safeMessageAttachment(params.attachment);
+        if (!body && !attachment) throw new Error('Write a message or add an attachment first.');
+        return requireUser(b).then(function (user) {
+            return loadProfile(b, user).then(function (profile) {
+                var requestedThreadId = text(params.thread_id);
+                var threadRef = requestedThreadId ? b.dbMod.doc(b.db, 'messageThreads', requestedThreadId) : null;
+                var existingPromise = threadRef ? b.dbMod.getDoc(threadRef) : Promise.resolve(null);
+                return existingPromise.then(function (existing) {
+                    var recipientPromise;
+                    if (existing) {
+                        if (!existing.exists()) throw new Error('That conversation is no longer available.');
+                        var existingData = existing.data() || {};
+                        var existingParticipants = Array.isArray(existingData.participants) ? existingData.participants : [];
+                        if (existingParticipants.indexOf(user.uid) === -1) throw new Error('You do not have permission to use that conversation.');
+                        recipientPromise = Promise.resolve(existingParticipants.find(function (uid) { return uid !== user.uid; }) || '');
+                    } else {
+                        recipientPromise = resolveMemberUid(b, params.recipient_uid || params.recipient_id);
+                    }
+                    return recipientPromise.then(function (recipientUid) {
+                        if (!recipientUid || recipientUid === user.uid) throw new Error('Choose another member to message.');
+                        var id = requestedThreadId || directThreadId(user.uid, recipientUid);
+                        var ref = b.dbMod.doc(b.db, 'messageThreads', id);
+                        var resolvedExistingPromise = existing ? Promise.resolve(existing) : b.dbMod.getDoc(ref);
+                        return Promise.all([getMemberDocument(b, recipientUid), resolvedExistingPromise]).then(function (resolved) {
+                            var recipientSnap = resolved[0];
+                            var resolvedExisting = resolved[1];
+                            if (!recipientSnap.exists()) throw new Error('That member could not be found.');
+                            var recipient = compactProfile(shapeMember(recipientUid, recipientSnap.data(), user, {}));
+                            var sender = compactProfile(Object.assign({}, profile, { uid: user.uid }));
+                            var messageRef = b.dbMod.doc(b.dbMod.collection(b.db, 'messageThreads', id, 'messages'));
+                            var batch = b.dbMod.writeBatch(b.db);
+                            var threadUpdate = {
+                                lastMessage: body || ('Shared ' + (attachment ? attachment.name : 'an attachment')),
+                                lastMessageAt: b.dbMod.serverTimestamp(),
+                                lastSenderUid: user.uid,
+                                updatedAt: b.dbMod.serverTimestamp()
+                            };
+                            if (!resolvedExisting.exists()) {
+                                threadUpdate.participants = [user.uid, recipientUid].sort();
+                                threadUpdate.participantProfiles = {};
+                                threadUpdate.participantProfiles[user.uid] = sender;
+                                threadUpdate.participantProfiles[recipientUid] = recipient;
+                                threadUpdate.readAt = {};
+                                threadUpdate.createdAt = b.dbMod.serverTimestamp();
+                                batch.set(ref, threadUpdate);
+                            } else {
+                                batch.update(ref, threadUpdate);
+                            }
+                            batch.set(messageRef, {
+                                authorUid: user.uid,
+                                body: body,
+                                attachment: attachment,
+                                createdAt: b.dbMod.serverTimestamp()
+                            });
+                            return batch.commit().then(function () {
+                                createNotification(b, {
+                                    recipientUid: recipientUid,
+                                    actor: sender,
+                                    type: 'message',
+                                    objectId: id,
+                                    objectType: 'message_thread'
+                                }).catch(function () {});
+                                return { thread_id: id, message_id: messageRef.id };
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    };
+
+    actions.cv_social_search_message_users = function (b, params) {
+        return actions.cv_find_users(b, { search: params.search || params.query || '' });
+    };
+
+    function notificationCounts(b, user) {
+        var notificationQuery = b.dbMod.query(
+            b.dbMod.collection(b.db, 'notifications'),
+            b.dbMod.where('recipientUid', '==', user.uid),
+            b.dbMod.limit(200)
+        );
+        var threadQuery = b.dbMod.query(
+            b.dbMod.collection(b.db, 'messageThreads'),
+            b.dbMod.where('participants', 'array-contains', user.uid),
+            b.dbMod.limit(100)
+        );
+        return Promise.all([b.dbMod.getDocs(notificationQuery), b.dbMod.getDocs(threadQuery)]).then(function (results) {
+            var unread = 0;
+            results[0].forEach(function (doc) {
+                var data = doc.data() || {};
+                if (!data.isRead && data.type !== 'message') unread += 1;
+            });
+            var messageUnread = 0;
+            results[1].forEach(function (doc) { messageUnread += threadUnread(doc.data() || {}, user.uid); });
+            return { unread_count: unread, message_unread_count: messageUnread, total_unread_count: unread + messageUnread };
+        });
+    }
+
+    actions.cv_social_get_notification_count = function (b) {
+        return requireUser(b).then(function (user) { return notificationCounts(b, user); });
+    };
+
+    actions.cv_social_get_notifications = function (b) {
+        return requireUser(b).then(function (user) {
+            var notificationQuery = b.dbMod.query(
+                b.dbMod.collection(b.db, 'notifications'),
+                b.dbMod.where('recipientUid', '==', user.uid),
+                b.dbMod.limit(100)
+            );
+            return Promise.all([b.dbMod.getDocs(notificationQuery), notificationCounts(b, user)]).then(function (results) {
+                var items = [];
+                results[0].forEach(function (doc) {
+                    var data = doc.data() || {};
+                    items.push({
+                        id: doc.id,
+                        type: text(data.type),
+                        actor: compactProfile(data.actor || {}),
+                        object_id: text(data.objectId),
+                        object_type: text(data.objectType),
+                        created_at: isoTime(data.createdAt),
+                        is_read: data.isRead ? 1 : 0
+                    });
+                });
+                items.sort(function (a, c) { return String(c.created_at || '').localeCompare(String(a.created_at || '')); });
+                return Object.assign({ items: items }, results[1]);
+            });
+        });
+    };
+
+    actions.cv_social_mark_notifications_read = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var requestedId = text(params.id);
+            var docsPromise;
+            if (requestedId) {
+                docsPromise = b.dbMod.getDoc(b.dbMod.doc(b.db, 'notifications', requestedId)).then(function (doc) { return doc.exists() ? [doc] : []; });
+            } else {
+                var notificationQuery = b.dbMod.query(
+                    b.dbMod.collection(b.db, 'notifications'),
+                    b.dbMod.where('recipientUid', '==', user.uid),
+                    b.dbMod.limit(200)
+                );
+                docsPromise = b.dbMod.getDocs(notificationQuery).then(function (snapshot) {
+                    var docs = [];
+                    snapshot.forEach(function (doc) { docs.push(doc); });
+                    return docs;
+                });
+            }
+            return docsPromise.then(function (docs) {
+                var batch = b.dbMod.writeBatch(b.db);
+                var changed = 0;
+                docs.forEach(function (doc) {
+                    var data = doc.data() || {};
+                    if (data.recipientUid !== user.uid || data.isRead) return;
+                    batch.update(doc.ref, { isRead: true, readAt: b.dbMod.serverTimestamp() });
+                    changed += 1;
+                });
+                return (changed ? batch.commit() : Promise.resolve()).then(function () { return { updated: changed }; });
+            });
+        });
+    };
+
+    // ---------------------------------------------------------------------
     // Bookmarks, settings, verification, Bible notes
     // ---------------------------------------------------------------------
 
@@ -1223,6 +1664,23 @@
                 }).then(function () {
                     return { id: id, bookmarked: true };
                 });
+            });
+        });
+    };
+
+    actions.cv_get_bookmarks = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var bookmarksQuery = b.dbMod.query(
+                b.dbMod.collection(b.db, 'users', user.uid, 'bookmarks'),
+                b.dbMod.limit(500)
+            );
+            return b.dbMod.getDocs(bookmarksQuery).then(function (snapshot) {
+                var items = [];
+                snapshot.forEach(function (doc) {
+                    var data = doc.data() || {};
+                    items.push({ id: doc.id, object_id: text(data.objectId || doc.id), object_type: text(data.objectType || 'post') });
+                });
+                return { items: items };
             });
         });
     };
@@ -1309,6 +1767,22 @@
                 lastScore: parseInt(params.score || 0, 10) || 0,
                 updatedAt: b.dbMod.serverTimestamp()
             }, { merge: true }).then(function () { return { saved: true }; });
+        });
+    };
+
+    /**
+     * Promise interface for UI modules that were previously wired to removed
+     * WordPress REST endpoints (Messenger and Notifications). Authentication
+     * and authorization still flow through Firebase Auth and Firestore rules.
+     */
+    window.cvDataRequest = function (action, params) {
+        return getBundle().then(function (b) {
+            var handler = actions[text(action)];
+            if (!handler) throw new Error('That Faith In function is not available.');
+            return handler(b, params || {}, {}, null);
+        }).catch(function (error) {
+            if (window.console && console.error) console.error('[Faith In] ' + action + ':', error);
+            throw new Error(publicErrorMessage(error));
         });
     };
 

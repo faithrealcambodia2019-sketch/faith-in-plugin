@@ -203,13 +203,20 @@ service cloud.firestore {
         allow read: if isSignedIn() && parentIsVisible();
         allow create: if isSignedIn()
           && parentIsVisible()
-          && request.resource.data.keys().hasOnly(['authorUid', 'author', 'content', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['authorUid', 'author', 'content', 'media_url', 'reactions', 'createdAt'])
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.author.uid == request.auth.uid
           && request.resource.data.content is string
-          && request.resource.data.content.size() > 0
-          && request.resource.data.content.size() <= 2000;
-        allow update: if false;
+          && request.resource.data.content.size() <= 2000
+          && validHttpsUrl(request.resource.data.get('media_url', ''))
+          && (request.resource.data.content.size() > 0 || request.resource.data.get('media_url', '') != '')
+          && request.resource.data.get('reactions', {}).size() == 0;
+        allow update: if isSignedIn()
+          && parentIsVisible()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          && request.resource.data.get('reactions', {}).diff(resource.data.get('reactions', {}))
+               .affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.get('reactions', {}).get(request.auth.uid, null) in [null, 'like'];
         allow delete: if isSignedIn() && resource.data.authorUid == request.auth.uid;
       }
     }
@@ -351,6 +358,121 @@ service cloud.firestore {
         && followId == request.auth.uid + '__' + request.resource.data.targetUid;
       allow update: if false;
       allow delete: if isSignedIn() && resource.data.followerUid == request.auth.uid;
+    }
+
+    // Direct conversations use additive collections, preserving all existing
+    // users, posts, and uploads. Only the two participants can read a thread.
+    match /messageThreads/{threadId} {
+      function isParticipant() {
+        return isSignedIn() && request.auth.uid in resource.data.participants;
+      }
+
+      function validThreadCreate() {
+        return request.resource.data.keys().hasOnly([
+          'participants', 'participantProfiles', 'lastMessage', 'lastMessageAt',
+          'lastSenderUid', 'readAt', 'createdAt', 'updatedAt'
+        ])
+          && request.resource.data.participants is list
+          && request.resource.data.participants.size() == 2
+          && request.auth.uid in request.resource.data.participants
+          && request.resource.data.participantProfiles is map
+          && request.resource.data.lastMessage is string
+          && request.resource.data.lastMessage.size() <= 500
+          && request.resource.data.lastSenderUid == request.auth.uid
+          && request.resource.data.readAt is map;
+      }
+
+      function validSendUpdate() {
+        return isParticipant()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessage', 'lastMessageAt', 'lastSenderUid', 'updatedAt'
+          ])
+          && request.resource.data.lastSenderUid == request.auth.uid
+          && request.resource.data.lastMessage is string
+          && request.resource.data.lastMessage.size() <= 500;
+      }
+
+      function validReadUpdate() {
+        return isParticipant()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+          && request.resource.data.readAt.diff(resource.data.get('readAt', {}))
+               .affectedKeys().hasOnly([request.auth.uid]);
+      }
+
+      allow read: if isParticipant();
+      allow create: if isSignedIn() && validThreadCreate();
+      allow update: if validSendUpdate() || validReadUpdate();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function callerIsParticipant() {
+          return isSignedIn()
+            && request.auth.uid in getAfter(/databases/$(database)/documents/messageThreads/$(threadId)).data.participants;
+        }
+
+        function validAttachment() {
+          return request.resource.data.attachment == null
+            || (
+              request.resource.data.attachment is map
+              && request.resource.data.attachment.keys().hasOnly(['type', 'name', 'data_url'])
+              && request.resource.data.attachment.type in ['image', 'video', 'file']
+              && request.resource.data.attachment.name is string
+              && request.resource.data.attachment.name.size() <= 160
+              && request.resource.data.attachment.data_url is string
+              && request.resource.data.attachment.data_url.size() <= 720000
+              && request.resource.data.attachment.data_url.matches('^data:(image/(jpeg|png|gif|webp)|video/(mp4|webm)|application/(pdf|zip));base64,[A-Za-z0-9+/=]+$')
+            );
+        }
+
+        allow read: if callerIsParticipant();
+        allow create: if callerIsParticipant()
+          && request.resource.data.keys().hasOnly(['authorUid', 'body', 'attachment', 'createdAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() <= 4000
+          && (request.resource.data.body.size() > 0 || request.resource.data.attachment != null)
+          && validAttachment();
+        allow update, delete: if false;
+      }
+    }
+
+    match /notifications/{notificationId} {
+      function isRecipient() {
+        return isSignedIn() && resource.data.recipientUid == request.auth.uid;
+      }
+
+      allow read: if isRecipient();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'recipientUid', 'actorUid', 'actor', 'type', 'objectId', 'objectType',
+          'isRead', 'createdAt', 'readAt'
+        ])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.recipientUid != request.auth.uid
+        && request.resource.data.actor.uid == request.auth.uid
+        && request.resource.data.type in ['reaction', 'comment', 'reply', 'follow', 'message', 'new_post']
+        && request.resource.data.objectId is string
+        && notificationId == request.resource.data.type + '__' + request.resource.data.objectId + '__' + request.auth.uid
+        && request.resource.data.isRead == false
+        && request.resource.data.readAt == null;
+      allow update: if (
+          isRecipient()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt'])
+          && request.resource.data.isRead == true
+        ) || (
+          isSignedIn()
+          && resource.data.actorUid == request.auth.uid
+          && request.resource.data.recipientUid == resource.data.recipientUid
+          && request.resource.data.actorUid == resource.data.actorUid
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.objectId == resource.data.objectId
+          && request.resource.data.objectType == resource.data.objectType
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['actor', 'isRead', 'createdAt', 'readAt'])
+          && request.resource.data.isRead == false
+          && request.resource.data.readAt == null
+        );
+      allow delete: if false;
     }
 
     match /{document=**} {

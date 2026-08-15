@@ -181,3 +181,100 @@ test("follow ids and outbound job links are validated", async () => {
   await assertFails(setDoc(doc(alice, "jobs/script"), { ...baseJob, apply_url: "javascript:alert(1)" }));
   await assertFails(setDoc(doc(alice, "jobs/no-contact"), { ...baseJob, apply_url: "" }));
 });
+
+test("comments support safe media and caller-scoped reactions", async () => {
+  const alice = environment.authenticatedContext("alice", { email: "alice@example.com" }).firestore();
+  const bob = environment.authenticatedContext("bob", { email: "bob@example.com" }).firestore();
+
+  await assertSucceeds(setDoc(doc(alice, "posts/comments-test"), post("alice")));
+  const comment = {
+    authorUid: "bob",
+    author: { uid: "bob", name: "Bob", avatar_url: "" },
+    content: "Amen",
+    media_url: "",
+    reactions: {},
+    createdAt: now(),
+  };
+  await assertSucceeds(setDoc(doc(bob, "posts/comments-test/comments/comment-1"), comment));
+  await assertFails(
+    setDoc(doc(bob, "posts/comments-test/comments/unsafe"), {
+      ...comment,
+      media_url: "javascript:alert(1)",
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(doc(alice, "posts/comments-test/comments/comment-1"), { "reactions.alice": "like" }),
+  );
+  await assertFails(
+    updateDoc(doc(bob, "posts/comments-test/comments/comment-1"), { "reactions.alice": null }),
+  );
+});
+
+test("direct messages are private to their two participants", async () => {
+  const alice = environment.authenticatedContext("alice", { email: "alice@example.com" }).firestore();
+  const bob = environment.authenticatedContext("bob", { email: "bob@example.com" }).firestore();
+  const charlie = environment.authenticatedContext("charlie", { email: "charlie@example.com" }).firestore();
+  const threadPath = "messageThreads/alice__bob";
+  const profile = (uid, id) => ({ uid, id, name: uid === "alice" ? "Alice" : "Bob", avatar_url: "" });
+
+  await assertSucceeds(
+    setDoc(doc(alice, threadPath), {
+      participants: ["alice", "bob"],
+      participantProfiles: { alice: profile("alice", 1), bob: profile("bob", 2) },
+      lastMessage: "Hello",
+      lastMessageAt: now(),
+      lastSenderUid: "alice",
+      readAt: {},
+      createdAt: now(),
+      updatedAt: now(),
+    }),
+  );
+  await assertSucceeds(
+    setDoc(doc(alice, `${threadPath}/messages/message-1`), {
+      authorUid: "alice",
+      body: "Hello",
+      attachment: null,
+      createdAt: now(),
+    }),
+  );
+  await assertSucceeds(getDoc(doc(bob, threadPath)));
+  await assertSucceeds(getDoc(doc(bob, `${threadPath}/messages/message-1`)));
+  await assertFails(getDoc(doc(charlie, threadPath)));
+  await assertFails(getDoc(doc(charlie, `${threadPath}/messages/message-1`)));
+  await assertSucceeds(updateDoc(doc(bob, threadPath), { "readAt.bob": now() }));
+  await assertFails(updateDoc(doc(bob, threadPath), { "readAt.alice": now() }));
+  await assertFails(
+    setDoc(doc(charlie, `${threadPath}/messages/message-2`), {
+      authorUid: "charlie",
+      body: "Intrusion",
+      attachment: null,
+      createdAt: now(),
+    }),
+  );
+});
+
+test("notifications can only be created by their actor and read by their recipient", async () => {
+  const alice = environment.authenticatedContext("alice", { email: "alice@example.com" }).firestore();
+  const bob = environment.authenticatedContext("bob", { email: "bob@example.com" }).firestore();
+  const charlie = environment.authenticatedContext("charlie", { email: "charlie@example.com" }).firestore();
+  const notificationPath = "notifications/follow__profile-bob__alice";
+  const notification = {
+    recipientUid: "bob",
+    actorUid: "alice",
+    actor: { uid: "alice", id: 1, name: "Alice", avatar_url: "" },
+    type: "follow",
+    objectId: "profile-bob",
+    objectType: "profile",
+    isRead: false,
+    createdAt: now(),
+    readAt: null,
+  };
+
+  await assertSucceeds(setDoc(doc(alice, notificationPath), notification));
+  await assertSucceeds(getDoc(doc(bob, notificationPath)));
+  await assertFails(getDoc(doc(charlie, notificationPath)));
+  await assertSucceeds(updateDoc(doc(bob, notificationPath), { isRead: true, readAt: now() }));
+  await assertFails(
+    setDoc(doc(charlie, "notifications/follow__profile-bob__alice"), notification),
+  );
+});

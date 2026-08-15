@@ -22,6 +22,7 @@
         prayers: [],
         jobs: [],
         bookmarks: [],
+        savedPostsOnly: false,
         downloads: [],
         favorites: [],
         settings: ((cv_ajax.auth && cv_ajax.auth.current_user && cv_ajax.auth.current_user.settings) || { theme: 'light', lang: 'English', notifications: true }),
@@ -476,8 +477,21 @@
     function cvSocialMoreButton(user, extraClass = '') {
         if (!user || !user.id) return '';
         const userId = parseInt(user.id, 10);
-        return `<button type="button" onclick="cvComingSoon('More actions'); return false;" class="cv-social-more-btn ${extraClass}" aria-label="More actions for ${escapeAttr(user.name || 'user')}" data-user-id="${userId}"><i data-lucide="more-horizontal" class="w-5 h-5"></i></button>`;
+        return `<button type="button" onclick="cvShareMemberProfile(${userId}); return false;" class="cv-social-more-btn ${extraClass}" aria-label="Share ${escapeAttr(user.name || 'member')} profile" data-user-id="${userId}"><i data-lucide="share-2" class="w-5 h-5"></i></button>`;
     }
+
+    window.cvShareMemberProfile = function(userId) {
+        const url = window.location.origin + '/app#member-' + encodeURIComponent(String(userId || ''));
+        if (navigator.share) {
+            navigator.share({ title: 'Faith In member profile', url }).catch(function() {});
+            return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function() { window.showToast('Profile link copied.', 'success'); });
+            return;
+        }
+        window.showToast('Profile link: ' + url, 'info');
+    };
 
     function cvSocialCompactNumber(value) {
         const n = parseInt(value || 0, 10);
@@ -2054,8 +2068,20 @@ window.cvOpenRegisterLink = (event) => {
 
     window.loadResources = loadResources;
     window.loadPosts = loadPosts;
+    function loadBookmarks() {
+        if (!state.isLoggedIn) return;
+        ajaxRequest('cv_get_bookmarks').done(function(response) {
+            if (!response || !response.success) return;
+            const payload = response.data || {};
+            const items = Array.isArray(payload) ? payload : (Array.isArray(payload.items) ? payload.items : []);
+            setState({ bookmarks: items.map(item => String(item.object_id || item.id || '')).filter(Boolean) });
+        });
+    }
+    window.loadBookmarks = loadBookmarks;
+
     function loadPosts() {
         setState({ feedLoading: true, feedError: '' });
+        loadBookmarks();
         return ajaxRequest('cv_get_posts')
             .done(function(response) {
                 if (response && response.success) {
@@ -2103,7 +2129,10 @@ window.cvOpenRegisterLink = (event) => {
             nextState.showAuthPanel = false;
             nextState.profileSubTab = state.profileSubTab || 'account';
         }
-        if (targetTab === 'home') nextState.feedError = '';
+        if (targetTab === 'home') {
+            nextState.feedError = '';
+            nextState.savedPostsOnly = false;
+        }
         setState(nextState);
         try {
             const nextHash = targetTab === 'home' ? '#home' : '#' + targetTab;
@@ -2584,10 +2613,34 @@ window.submitAuthCard = (event) => window.loginWithEmailPassword(event);
     window.toggleBookmark = (id) => {
         ajaxRequest('cv_toggle_bookmark', { resource_id: id }).done(function(response) {
             if (response.success) {
-                window.showToast('Bookmark updated');
-                loadResources(); // Reload to update UI
+                const bookmarked = !!(response.data && response.data.bookmarked);
+                const next = (state.bookmarks || []).map(String).filter(value => value !== String(id));
+                if (bookmarked) next.push(String(id));
+                setState({ bookmarks: next });
+                window.showToast(bookmarked ? 'Saved to your collection.' : 'Removed from saved items.', 'success');
             }
         });
+    };
+
+    window.cvTogglePostBookmark = (id) => {
+        ajaxRequest('cv_toggle_bookmark', { post_id: id, object_type: 'post' }).done(function(response) {
+            if (!response || !response.success) {
+                window.showToast((response && response.data) || 'Could not update saved items.', 'error');
+                return;
+            }
+            const bookmarked = !!(response.data && response.data.bookmarked);
+            const next = (state.bookmarks || []).map(String).filter(value => value !== String(id));
+            if (bookmarked) next.push(String(id));
+            setState({ bookmarks: next });
+            window.showToast(bookmarked ? 'Post saved.' : 'Post removed from saved items.', 'success');
+        }).fail(function() {
+            window.showToast('Could not update saved items. Please try again.', 'error');
+        });
+    };
+
+    window.cvShowSavedPosts = () => {
+        setState({ tab: 'home', selectedResource: null, savedPostsOnly: true, feedError: '' });
+        loadBookmarks();
     };
 
     window.deleteResource = (id) => {
@@ -3013,7 +3066,7 @@ window.signOut = () => {
                     + '</div>'
                     + (comment.content ? '<div class="cv-post-comment-text">' + escapeHtml(comment.content || '') + '</div>' : '')
                     + (mediaUrl ? '<img class="cv-post-comment-media" src="' + mediaUrl + '" alt="Comment image" loading="lazy" />' : '')
-                    + '<div class="cv-post-comment-actions"><button type="button" onclick="cvComingSoon(\'Comment like\')">Like</button><button type="button" onclick="cvFocusPostComment(\'' + post.id + '\')">Reply</button></div>'
+                    + '<div class="cv-post-comment-actions"><button type="button" class="' + (comment.user_reaction ? 'is-active' : '') + '" onclick="cvToggleCommentReaction(\'' + post.id + '\',\'' + comment.id + '\')" aria-pressed="' + (comment.user_reaction ? 'true' : 'false') + '">' + (comment.user_reaction ? 'Liked' : 'Like') + (Number(comment.reaction_count || comment.reactions || 0) ? ' · ' + Number(comment.reaction_count || comment.reactions || 0) : '') + '</button><button type="button" onclick="cvFocusPostComment(\'' + post.id + '\')">Reply</button></div>'
                 + '</div>'
             + '</div>';
         }).join('') + '</div>';
@@ -3201,6 +3254,52 @@ window.signOut = () => {
     window.cvFocusPostComment = (id) => {
         const input = document.getElementById('cv-comment-input-' + id);
         if (input) input.focus();
+        const post = (state.posts || []).find(item => String(item.id) === String(id));
+        if (!post || post.comments_loaded || post.comments_loading) return;
+        post.comments_loading = true;
+        ajaxRequest('cv_get_post_comments', { post_id: id }).done(function(response) {
+            const items = response && response.success && response.data && Array.isArray(response.data.items) ? response.data.items : [];
+            state.posts = (state.posts || []).map(item => String(item.id) === String(id)
+                ? Object.assign({}, item, { recent_comments: items, comments_loaded: true, comments_loading: false })
+                : item);
+            render();
+            const freshInput = document.getElementById('cv-comment-input-' + id);
+            if (freshInput) freshInput.focus();
+        }).fail(function() {
+            post.comments_loading = false;
+            window.showToast('Could not load comments. Please try again.', 'error');
+        });
+    };
+
+    window.cvToggleCommentReaction = (postId, commentId) => {
+        ajaxRequest('cv_toggle_comment_reaction', { post_id: postId, comment_id: commentId }).done(function(response) {
+            if (!response || !response.success) {
+                window.showToast((response && response.data) || 'Could not update that comment.', 'error');
+                return;
+            }
+            const payload = response.data || {};
+            state.posts = (state.posts || []).map(post => {
+                if (String(post.id) !== String(postId)) return post;
+                const comments = (post.recent_comments || []).map(comment => String(comment.id) === String(commentId)
+                    ? Object.assign({}, comment, { reaction_count: Number(payload.reaction_count || 0), reactions: Number(payload.reaction_count || 0), user_reaction: payload.user_reaction || null })
+                    : comment);
+                return Object.assign({}, post, { recent_comments: comments });
+            });
+            render();
+        });
+    };
+
+    window.cvInsertCommentEmoji = (id) => {
+        const input = document.getElementById('cv-comment-input-' + id);
+        if (!input) return;
+        const emojis = ['🙏', '❤️', '🙌', '😊', '✝️', '🕊️'];
+        const index = Number(input.dataset.emojiIndex || 0) % emojis.length;
+        const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+        const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+        input.value = input.value.slice(0, start) + emojis[index] + input.value.slice(end);
+        input.dataset.emojiIndex = String(index + 1);
+        input.focus();
+        input.setSelectionRange(start + emojis[index].length, start + emojis[index].length);
     };
 
     window.cvSelectCommentImage = (id) => {
@@ -3254,7 +3353,7 @@ window.signOut = () => {
                     const nextComments = Array.isArray(post.recent_comments) ? post.recent_comments.slice() : [];
                     if (payload.comment) nextComments.push(payload.comment);
                     const count = Number(payload.comment_count || nextComments.length || 0);
-                    return Object.assign({}, post, { comments: count, comment_count: count, recent_comments: nextComments.slice(-3) });
+                    return Object.assign({}, post, { comments: count, comment_count: count, recent_comments: nextComments, comments_loaded: true });
                 });
                 if (input) input.value = '';
                 if (fileInput) fileInput.value = '';
@@ -4791,7 +4890,10 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     }
 
     function cvVisibleFeedPosts(posts) {
-        return (Array.isArray(posts) ? posts : []).filter(post => !cvIsBlessingPost(post));
+        const visible = (Array.isArray(posts) ? posts : []).filter(post => !cvIsBlessingPost(post));
+        if (!state.savedPostsOnly) return visible;
+        const saved = new Set((state.bookmarks || []).map(String));
+        return visible.filter(post => saved.has(String(post.id)));
     }
 
     function cvRenderFeedLeftSidebar() {
@@ -4822,7 +4924,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                             <button type="button" onclick="setTab('home')"><span>Post impressions</span><strong>${impressions}</strong></button>
                         </div>
                     </div>
-                    <button type="button" class="cv-react-saved-items" onclick="cvComingSoon('Saved items')"><i data-lucide="heart"></i><span>Saved items</span></button>
+                    <button type="button" class="cv-react-saved-items ${state.savedPostsOnly ? 'is-active' : ''}" onclick="cvShowSavedPosts()" aria-pressed="${state.savedPostsOnly ? 'true' : 'false'}"><i data-lucide="bookmark"></i><span>Saved items</span><strong>${(state.bookmarks || []).length || ''}</strong></button>
                 </section>
                 <section class="cv-feed-left-card cv-feed-shortcuts-card">
                     <button type="button" class="cv-feed-shortcut ${state.tab === 'home' ? 'is-active' : ''}" onclick="setTab('home')"><i data-lucide="home"></i><span>Home Feed</span></button>
@@ -5501,13 +5603,13 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                             <button type="button" class="cv-feed-toolbar__sort cv-feed-sort-btn">Sort by: <strong>Top</strong> <i data-lucide="chevron-down"></i></button>
                         </div>` : '';
 
+        const savedHeading = state.savedPostsOnly ? `<section class="cv-saved-feed-heading"><div><span>Private collection</span><h1>Saved posts</h1><p>Only you can see the posts you save.</p></div><button type="button" onclick="setTab('home')"><i data-lucide="arrow-left"></i><span>Back to feed</span></button></section>` : '';
         let html = `
             <div class="cv-feed-page cv-feed-page-linkedin cv-react-feed-page max-w-7xl mx-auto w-full px-4 md:px-6 py-8 animate-fade-in pb-32">
                 <div class="cv-feed-layout cv-feed-layout--three-col">
                     ${cvRenderFeedLeftSidebar()}
                     <main class="cv-feed-main-column">
-                        ${cvRenderStoriesCarousel()}
-                        ${cvRenderFeedComposer()}
+                        ${state.savedPostsOnly ? savedHeading : cvRenderStoriesCarousel() + cvRenderFeedComposer()}
                         ${desktopSortToolbar}
                         <div class="space-y-6 cv-feed-stream">
         `;
@@ -5522,11 +5624,10 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                 <section class="cv-feed-card cv-empty-feed-card" aria-labelledby="cv-empty-feed-title">
                     <div class="cv-empty-feed-card__content">
                         <span class="cv-empty-feed-card__icon" aria-hidden="true"><i data-lucide="message-circle-heart"></i></span>
-                        <h2 id="cv-empty-feed-title">${hasBlessings ? 'Your blessings are ready above' : 'Start a meaningful conversation'}</h2>
-                        <p>${hasBlessings ? 'Share a post, prayer request, photo, or article to begin your community feed.' : 'Encourage the community with a testimony, prayer request, ministry update, or thoughtful article.'}</p>
+                        <h2 id="cv-empty-feed-title">${state.savedPostsOnly ? 'No saved posts yet' : (hasBlessings ? 'Your blessings are ready above' : 'Start a meaningful conversation')}</h2>
+                        <p>${state.savedPostsOnly ? 'Use the Save button on any post to keep it in this private collection.' : (hasBlessings ? 'Share a post, prayer request, photo, or article to begin your community feed.' : 'Encourage the community with a testimony, prayer request, ministry update, or thoughtful article.')}</p>
                         <div class="cv-empty-feed-card__actions">
-                            <button type="button" onclick="cvOpenFeedCreate('text')"><i data-lucide="plus" aria-hidden="true"></i><span>Create a post</span></button>
-                            <button type="button" onclick="setTab('users')"><i data-lucide="users" aria-hidden="true"></i><span>Find people</span></button>
+                            ${state.savedPostsOnly ? `<button type="button" onclick="setTab('home')"><i data-lucide="arrow-left" aria-hidden="true"></i><span>Browse the feed</span></button>` : `<button type="button" onclick="cvOpenFeedCreate('text')"><i data-lucide="plus" aria-hidden="true"></i><span>Create a post</span></button><button type="button" onclick="setTab('users')"><i data-lucide="users" aria-hidden="true"></i><span>Find people</span></button>`}
                         </div>
                     </div>
                 </section>`;
@@ -5535,6 +5636,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                 const selectedReaction = post.current_user_reaction || post.user_reaction || '';
                 const reactionMeta = cvReactionMeta(selectedReaction || 'like');
                 const isLiked = !!selectedReaction;
+                const isSaved = (state.bookmarks || []).map(String).includes(String(post.id));
                 const author = post.author || {};
                 html += `
                     <article class="cv-feed-card cv-react-post-card p-6 rounded-3xl shadow-sm border transition-shadow hover:shadow-md ${isDark ? 'bg-slate-800 border-slate-700/50' : 'bg-white border-slate-100'}">
@@ -5600,14 +5702,17 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                                     <span class="cv-action-icon"><i data-lucide="share-2"></i></span>
                                     <span class="cv-action-label">Share</span>
                                 </button>
+                                <button type="button" onclick="cvTogglePostBookmark('${post.id}')" class="cv-linkedin-action ${isSaved ? 'is-active cv-post-save-active' : ''}" aria-label="${isSaved ? 'Remove this post from saved items' : 'Save this post'}" aria-pressed="${isSaved ? 'true' : 'false'}">
+                                    <span class="cv-action-icon"><i data-lucide="bookmark" class="${isSaved ? 'fill-current' : ''}"></i></span>
+                                    <span class="cv-action-label">${isSaved ? 'Saved' : 'Save'}</span>
+                                </button>
                             </div>
                             <div class="cv-linkedin-comment-row">
                                 <div class="cv-comment-avatar">${renderProfileAvatar((state.currentUser && state.currentUser.logged_in) ? Object.assign({}, state.currentUser, { name: state.currentUser.name || 'Me' }) : { name: 'Guest' }, 'w-full h-full', 'text-[10px]')}</div>
                                 <div class="cv-comment-input-wrap ${isDark ? 'cv-comment-input-dark' : ''}">
                                     <input id="cv-comment-input-${post.id}" type="text" placeholder="Add a comment..." onkeydown="cvHandleCommentKey(event, '${post.id}')" aria-label="Add a comment" />
                                     <div class="cv-comment-tools" aria-label="Comment tools">
-                                        <button type="button" class="cv-comment-tool-btn" onclick="cvComingSoon('Khmer Emojis')" aria-label="Add emoji"><i data-lucide="smile"></i></button>
-                                        <button type="button" class="cv-comment-tool-btn" onclick="cvComingSoon('Khmer Stickers')" aria-label="Add sticker"><i data-lucide="sticker"></i></button>
+                                        <button type="button" class="cv-comment-tool-btn" onclick="cvInsertCommentEmoji('${post.id}')" aria-label="Insert an emoji" title="Insert emoji"><i data-lucide="smile"></i></button>
                                         <button type="button" class="cv-comment-tool-btn" onclick="cvSelectCommentImage('${post.id}')" aria-label="Add image"><i data-lucide="image"></i></button>
                                         <button type="button" class="cv-comment-send-btn" onclick="cvSubmitPostComment('${post.id}')" aria-label="Post comment"><i data-lucide="send"></i></button>
                                         <input id="cv-comment-image-${post.id}" type="file" accept="image/*" class="cv-comment-image-input" onchange="cvCommentImagePicked('${post.id}')" aria-label="Attach image to comment" />
@@ -5876,9 +5981,6 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <div class="flex-1 min-w-0">
                             <div class="flex justify-between items-start gap-3">
                                 <h3 class="cv-job-card-title text-[#469b76] font-semibold text-base group-hover:underline leading-tight mb-0.5 truncate">${escapeHtml(job.title || 'Untitled Job')}</h3>
-                                <button type="button" class="text-black/60 hover:text-black/90 hidden md:block" aria-label="Save job">
-                                    <i data-lucide="bookmark" class="w-5 h-5"></i>
-                                </button>
                             </div>
                             <p class="text-black/90 text-sm truncate">${escapeHtml(job.organization || 'Organization')}</p>
                             <p class="text-black/60 text-sm mb-1 truncate">${escapeHtml(loc || 'Location not listed')}</p>
@@ -7748,13 +7850,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     panelPortal.className = 'cv-main-feed-messenger-portal';
 
     const state = { open:false, conversations:[], activeThreadId:null, activeUser:null, messages:[], searchResults:[], attachment:null, error:'', sending:false };
-    const rootUrl = cv_ajax.rest_root;
-    const restNonce = cv_ajax.rest_nonce || '';
-    const isLoggedIn = !!(cv_ajax.auth && cv_ajax.auth.is_logged_in);
-    if (!isLoggedIn) {
-        window.cvOpenFaithInChat = function(){ if (typeof window.showToast === 'function') window.showToast('Please sign in to message users.', 'info'); };
-        return;
-    }
+    function isLoggedIn(){ return !!(cv_ajax.auth && cv_ajax.auth.is_logged_in); }
     const loginUrl = '/wp-login.php';
 
     function e(v){ return String(v||'').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
@@ -7787,7 +7883,23 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         if(type==='video') return `<div class="cv-feed-msg-attachment"><video class="cv-feed-msg-attachment-video" src="${e(data)}" controls></video></div>`;
         return `<div class="cv-feed-msg-attachment"><a class="cv-feed-msg-attachment-file ${mine?'is-mine':''}" href="${e(data)}" download="${e(name)}">${msgIcon('file',20)}<span>${e(name)}</span></a></div>`;
     }
-    async function api(path, options={}){ const r=await fetch(rootUrl+path,{method:options.method||'GET',headers:{'Content-Type':'application/json','X-WP-Nonce':restNonce},credentials:'same-origin',body:options.body?JSON.stringify(options.body):undefined}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'Request failed.'); return j; }
+    async function api(path, options={}){
+        if(typeof window.cvDataRequest!=='function') throw new Error('Messaging is still connecting. Please try again.');
+        const body=options.body||{};
+        if(path==='/social/messages/threads' && (options.method||'GET')==='POST') return window.cvDataRequest('cv_social_send_message',body);
+        if(path==='/social/messages/threads') return window.cvDataRequest('cv_social_get_message_threads',{});
+        if(path.indexOf('/social/messages/threads/')===0){
+            const id=decodeURIComponent(path.slice('/social/messages/threads/'.length));
+            return (options.method||'GET')==='POST'
+                ? window.cvDataRequest('cv_social_send_message',Object.assign({},body,{thread_id:id}))
+                : window.cvDataRequest('cv_social_get_message_thread',{thread_id:id});
+        }
+        if(path.indexOf('/social/users/search')===0){
+            const query=path.indexOf('?')>=0 ? new URLSearchParams(path.slice(path.indexOf('?')+1)).get('q')||'' : '';
+            return window.cvDataRequest('cv_social_search_message_users',{search:query});
+        }
+        throw new Error('That messaging function is not available.');
+    }
     function unread(){ return state.conversations.reduce((s,t)=>s+Number(t.unread_count||0),0); }
     function timeLabel(value){
         if(!value) return '';
@@ -7805,12 +7917,12 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     }
     function lastActivity(thread){ return timeLabel(thread && (thread.last_message_at || thread.updated_at || thread.created_at || thread.created || thread.date)); }
     function isVisible(node){ return !!(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length)); }
-    function findMount(){ const candidates=Array.from(document.querySelectorAll('#cv-nav-message-slot-desktop, #cv-nav-message-slot-mobile')); return candidates.find(isVisible) || candidates[0] || wrap; }
+    function findMount(){ const candidates=Array.from(document.querySelectorAll('#cv-nav-message-slot-desktop, #cv-nav-message-slot-mobile')); return candidates.find(isVisible) || candidates[0] || null; }
     function mountHolder(){ const mount=findMount(); if(mount && holder.parentNode!==mount) mount.appendChild(holder); if(document.body && panelPortal.parentNode!==document.body) document.body.appendChild(panelPortal); }
     function q(sel){ return (panelPortal && panelPortal.querySelector(sel)) || holder.querySelector(sel); }
 
     function list(){
-        if(!isLoggedIn) return `<div class="cv-feed-msg-empty"><strong>Messaging</strong><p>Please sign in to chat.</p><a class="cv-social-button" href="${e(loginUrl)}">Sign in</a></div>`;
+        if(!isLoggedIn()) return `<div class="cv-feed-msg-empty"><strong>Messaging</strong><p>Please sign in to chat.</p><a class="cv-social-button" href="${e(loginUrl)}">Sign in</a></div>`;
         const search = state.searchResults.length ? `<div class="cv-feed-msg-search-results"><div class="cv-feed-msg-list-title"><span>People</span><em>${state.searchResults.length}</em></div>${state.searchResults.map(u=>`<button type="button" class="cv-feed-msg-user-result" data-cv-main-msg-user="${e(u.id)}" data-cv-main-msg-user-name="${e(u.name||'User')}">${av(u)}<span><strong>${e(u.name||'User')}</strong><small>${e(handle(u))}</small></span></button>`).join('')}</div>` : '';
         const conv = state.conversations.length ? state.conversations.map(t=>{
             const u=t.other_user||{name:'User'};
@@ -7830,7 +7942,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         if(!state.activeThreadId&&!state.activeUser) return `<div class="cv-feed-msg-welcome"><div class="cv-feed-msg-welcome-icon cv-linkedin-empty-bubble">${msgIcon('message',56)}</div><strong>Welcome to Messaging</strong><p>Choose a conversation, search for a member, or start a new chat in a cleaner professional workspace.</p><div class="cv-feed-msg-welcome-points"><span>${msgIcon('message',16)} Direct chat</span><span>${msgIcon('image',16)} Photo sharing</span><span>${msgIcon('film',16)} Video sharing</span><span>${msgIcon('file',16)} File sharing</span></div></div>`;
         const u=state.activeUser||{name:'Chat'};
         const bubbles=state.messages.length?state.messages.map(m=>`<div class="cv-feed-msg-row ${m.mine?'mine':'theirs'}"><div class="cv-feed-msg-bubble ${m.mine?'mine':'theirs'}">${renderAttachment(m.attachment,m.mine)}${m.body?`<p dir="auto">${e(m.body||'')}</p>`:''}<small><span>${e(timeLabel(m.created_at)||m.created_at||'')}</span>${m.mine?`<span class="cv-feed-msg-checks">${msgIcon('checkcheck',14)}</span>`:''}</small></div></div>`).join(''):`<div class="cv-feed-msg-empty small cv-feed-msg-start"><span class="cv-feed-msg-start-icon">${msgIcon('message',32)}</span><strong>No messages yet</strong><p>Say hello and start the conversation.</p></div>`;
-        return `<div class="cv-feed-msg-chat"><div class="cv-feed-msg-chat-head"><button type="button" data-cv-main-msg-back class="cv-feed-msg-back" aria-label="Back to conversations">${msgIcon('back',18)}</button>${av(u)}<div class="cv-feed-msg-chat-title"><strong>${e(u.name||'Chat')}</strong><small>${e(handle(u))} · Direct message</small></div><div class="cv-feed-msg-chat-actions"><button type="button" class="cv-feed-msg-chat-action" data-cv-msg-focus-search title="Search people">${msgIcon('search',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-phone-action" data-cv-main-msg-call="audio" title="Voice call">${msgIcon('phone',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-video-action" data-cv-main-msg-call="video" title="Video call">${msgIcon('video',20)}</button><button type="button" class="cv-feed-msg-chat-action" title="More options">${msgIcon('more',20)}</button></div></div><div class="cv-feed-msg-bubbles" data-cv-main-msg-bubbles role="log" aria-live="polite" aria-relevant="additions text">${bubbles}</div>${composer()}<p class="cv-feed-msg-hint">Press Enter to send. Use Shift + Enter for a new line.</p></div>`;
+        return `<div class="cv-feed-msg-chat"><div class="cv-feed-msg-chat-head"><button type="button" data-cv-main-msg-back class="cv-feed-msg-back" aria-label="Back to conversations">${msgIcon('back',18)}</button>${av(u)}<div class="cv-feed-msg-chat-title"><strong>${e(u.name||'Chat')}</strong><small>${e(handle(u))} · Direct message</small></div><div class="cv-feed-msg-chat-actions"><button type="button" class="cv-feed-msg-chat-action" data-cv-msg-focus-search title="Search people">${msgIcon('search',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-phone-action" data-cv-main-msg-call="audio" title="Voice call">${msgIcon('phone',20)}</button><button type="button" class="cv-feed-msg-chat-action cv-feed-msg-video-action" data-cv-main-msg-call="video" title="Video call">${msgIcon('video',20)}</button></div></div><div class="cv-feed-msg-bubbles" data-cv-main-msg-bubbles role="log" aria-live="polite" aria-relevant="additions text">${bubbles}</div>${composer()}<p class="cv-feed-msg-hint">Press Enter to send. Use Shift + Enter for a new line.</p></div>`;
     }
     function syncComposerHeight(scope){
         const target = scope && scope.querySelector ? scope.querySelector("[data-cv-main-msg-body]") : q("[data-cv-main-msg-body]");
@@ -7847,7 +7959,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     }
     function render(){ mountHolder(); const n=unread(); const badge=n?`<em>${n>99?'99+':n}</em>`:''; const hasActiveChat=!!(state.activeThreadId||state.activeUser); holder.innerHTML=`<button type="button" class="cv-feed-messenger-button cv-nav-clean-item" data-cv-main-msg-toggle aria-label="Messages" aria-expanded="${state.open?'true':'false'}" title="Messages"><span class="cv-feed-nav-action-icon cv-feed-nav-action-icon-message" aria-hidden="true">${msgIcon('message',20)}</span><span class="cv-feed-nav-action-label">Messaging</span>${badge}</button>`; panelPortal.innerHTML=`<div class="cv-feed-msg-backdrop ${state.open?'is-open':''}" data-cv-main-msg-backdrop></div><section class="cv-feed-messenger-panel cv-linkedin-chat-panel cv-react-exact-ui ${state.open?'is-open':''} ${hasActiveChat?'cv-chat-active':''}" aria-label="Messaging" role="dialog" aria-modal="true"><header class="cv-feed-msg-header"><div><strong>Messaging</strong><small>Professional, secure conversations</small></div><button type="button" data-cv-main-msg-close aria-label="Close messaging">${msgIcon('close',22)}</button></header><div class="cv-feed-msg-body">${list()}${chat()}</div></section>`; holder.classList.toggle('is-open', !!state.open); panelPortal.classList.toggle('is-open', !!state.open); const b=q('[data-cv-main-msg-bubbles]'); if(b) b.scrollTop=b.scrollHeight; syncComposerHeight(document); updateSendState(); if(state.open) setTimeout(focusMessengerPrimaryField, 0); }
 
-    async function load(){ if(!isLoggedIn) return; const d=await api('/social/messages/threads'); state.conversations=d.items||[]; render(); }
+    async function load(){ if(!isLoggedIn()) return; const d=await api('/social/messages/threads'); state.conversations=d.items||[]; render(); }
     async function openThread(id){ state.activeThreadId=id; state.activeUser=null; state.messages=[]; state.attachment=null; render(); const d=await api(`/social/messages/threads/${id}`); state.messages=d.items||[]; state.activeUser=d.other_user||null; await load(); state.activeThreadId=id; render(); }
     async function search(searchTerm){ const term=(searchTerm||'').trim(); const d=await api('/social/users/search?q='+encodeURIComponent(term)); state.searchResults=d.items||[]; render(); const input=q('[data-cv-main-msg-search]'); if(input){input.value=term;input.focus();} }
     function cleanAttachment(att){ if(!att) return null; return { type:att.type||'file', name:att.name||'attachment', data_url:att.dataUrl||att.data_url||'' }; }
@@ -7856,7 +7968,8 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     function showCallNotice(){ if(typeof window.showToast==='function') window.showToast('Voice and video calls need a real-time calling server. Messaging is connected and ready.', 'info'); else showError('Voice and video calls need a real-time calling server. Messaging is connected and ready.'); }
     function fileSelected(input,type){ const file=input.files&&input.files[0]; if(!file) return; if(file.size>500*1024){ input.value=''; showError('File too large. Max 500KB allowed.'); return; } const reader=new FileReader(); reader.onload=function(ev){ state.attachment={type:type||'file', name:file.name, dataUrl:ev.target.result}; state.error=''; render(); }; reader.onerror=function(){ showError('Could not read this file.'); }; reader.readAsDataURL(file); input.value=''; }
 
-    window.cvOpenFaithInChat = function(userOrId, name){ const user = (typeof userOrId === 'object' && userOrId) ? userOrId : { id: Number(userOrId || 0), name: name || 'User' }; if(!user.id){ if(typeof window.showToast==='function') window.showToast('User not found.', 'error'); return; } state.open = true; state.activeThreadId = null; state.activeUser = user; state.messages = []; state.searchResults = []; state.attachment=null; render(); load().catch(()=>{}); };
+    window.cvOpenFaithInChat = function(userOrId, name){ if(!isLoggedIn()){ if(typeof window.showToast==='function') window.showToast('Please sign in to message members.', 'info'); return; } const user = (typeof userOrId === 'object' && userOrId) ? userOrId : { id: Number(userOrId || 0), name: name || 'User' }; if(!user.id){ if(typeof window.showToast==='function') window.showToast('User not found.', 'error'); return; } state.open = true; state.activeThreadId = null; state.activeUser = user; state.messages = []; state.searchResults = []; state.attachment=null; render(); load().catch(()=>{}); };
+    window.cvOpenFaithInMessageThread = function(threadId){ if(!threadId) return; state.open=true; render(); openThread(threadId).catch(err=>showError(err.message||'Could not open that conversation.')); };
 
     const observer = new MutationObserver(function(){ mountHolder(); }); observer.observe(wrap, { childList:true, subtree:true }); window.addEventListener('resize', mountHolder);
     let timer=null;
@@ -7880,7 +7993,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     // user isn't logged in. Avoids running every 30s in background tabs.
     setInterval(function(){
         if (typeof document !== 'undefined' && document.hidden) return;
-        if (!isLoggedIn) return;
+        if (!isLoggedIn()) return;
         load().catch(()=>{});
     }, 30000);
 }());
@@ -7895,20 +8008,23 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
     const wrap = document.querySelector('.curated-vault-premium-wrap');
     if (!wrap) return;
 
-    const isLoggedIn = !!(cv_ajax.auth && cv_ajax.auth.is_logged_in);
-    if (!isLoggedIn) return;
+    function isLoggedIn(){ return !!(cv_ajax.auth && cv_ajax.auth.is_logged_in); }
     const holder = document.createElement('div');
     holder.className = 'cv-main-feed-notifications-holder';
 
     const state = { open:false, unread:0, messageUnread:0, total:0, items:[], filter:'all', firstPoll:true };
-    const rootUrl = cv_ajax.rest_root;
-    const restNonce = cv_ajax.rest_nonce || '';
 
     function e(v){ return String(v||'').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
     function isVisible(node){ return !!(node && (node.offsetWidth || node.offsetHeight || node.getClientRects().length)); }
-    function findMount(){ const candidates=Array.from(document.querySelectorAll('#cv-nav-notification-slot-desktop, #cv-nav-notification-slot-mobile')); return candidates.find(isVisible) || candidates[0] || wrap; }
+    function findMount(){ const candidates=Array.from(document.querySelectorAll('#cv-nav-notification-slot-desktop, #cv-nav-notification-slot-mobile')); return candidates.find(isVisible) || candidates[0] || null; }
     function mountHolder(){ const mount=findMount(); if(!mount) return; if(holder.parentNode!==mount) mount.appendChild(holder); }
-    async function api(path, options={}){ const r=await fetch(rootUrl+path,{method:options.method||'GET',headers:{'Content-Type':'application/json','X-WP-Nonce':restNonce},credentials:'same-origin',body:options.body?JSON.stringify(options.body):undefined}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.message||'Request failed.'); return j; }
+    async function api(path, options={}){
+        if(typeof window.cvDataRequest!=='function') throw new Error('Notifications are still connecting. Please try again.');
+        if(path==='/social/notifications/count') return window.cvDataRequest('cv_social_get_notification_count',{});
+        if(path==='/social/notifications') return window.cvDataRequest('cv_social_get_notifications',{});
+        if(path==='/social/notifications/read') return window.cvDataRequest('cv_social_mark_notifications_read',options.body||{});
+        throw new Error('That notification function is not available.');
+    }
     function normalizeType(type){
         const raw=String(type||'').toLowerCase();
         if(raw==='reaction'||raw==='like'||raw==='love'||raw==='support'||raw==='celebrate') return 'reaction';
@@ -7973,9 +8089,9 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         holder.innerHTML=`<button type="button" class="cv-feed-notifications-button cv-nav-clean-item" data-cv-main-notification-toggle aria-label="Notifications" aria-expanded="${state.open?'true':'false'}" title="Notifications"><span class="cv-feed-nav-action-icon cv-feed-nav-action-icon-bell" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3.25a4.5 4.5 0 0 0-4.5 4.5v1.03c0 .74-.24 1.46-.68 2.05L5.4 12.7a2.25 2.25 0 0 0 1.8 3.55h9.6a2.25 2.25 0 0 0 1.8-3.55l-1.42-1.87a3.42 3.42 0 0 1-.68-2.05V7.75a4.5 4.5 0 0 0-4.5-4.5Z" fill="currentColor"/><path d="M9.75 18.25a2.25 2.25 0 0 0 4.5 0h-4.5Z" fill="currentColor"/></svg></span><span class="cv-feed-nav-action-label">Notifications</span>${badge}</button><section class="cv-feed-notifications-panel ${state.open?'is-open':''}" role="dialog" aria-label="Notifications"><header class="cv-feed-notification-fb-header"><div><strong>Notifications</strong><small>${count?count+' unread update'+(count===1?'':'s'):'You are up to date'}</small></div><button type="button" data-cv-main-notification-close aria-label="Close notifications">×</button></header><div class="cv-feed-notification-tabs">${tab('all','All')}${tab('unread','Unread')}${tab('messages','Messages')}${tab('activity','Activity')}<button type="button" class="cv-feed-notification-read" data-cv-main-notification-read>Mark all read</button></div><div class="cv-feed-notifications-list">${items}</div></section>`;
     }
     function toast(message){ if(typeof window.showToast==='function'){ window.showToast(message, 'info'); return; } const node=document.createElement('div'); node.className='cv-feed-notification-toast'; node.textContent=message; document.body.appendChild(node); requestAnimationFrame(()=>node.classList.add('is-visible')); setTimeout(()=>{ node.classList.remove('is-visible'); setTimeout(()=>node.remove(),240); },2600); }
-    async function poll(){ if(!isLoggedIn) return; const previous=state.total; const data=await api('/social/notifications/count'); state.unread=Number(data.unread_count||0); state.messageUnread=Number(data.message_unread_count||0); state.total=Number(data.total_unread_count||(state.unread+state.messageUnread)); if(!state.firstPoll&&state.total>previous) toast(state.total-previous===1?'You have a new notification.':'You have new notifications.'); state.firstPoll=false; render(); }
-    async function loadNotifications(markAsRead){ if(!isLoggedIn) return; const data=await api('/social/notifications'); state.items=data.items||[]; state.unread=Number(data.unread_count||0); state.messageUnread=Number(data.message_unread_count||0); state.total=Number(data.total_unread_count||(state.unread+state.messageUnread)); render(); if(markAsRead&&state.items.length){ await api('/social/notifications/read',{method:'POST',body:{}}); state.unread=0; state.total=state.messageUnread; state.items=state.items.map(item=>Object.assign({},item,{is_read:1})); render(); } }
-    async function markOneRead(id){ if(!id) return; const item=state.items.find(row=>String(row.id)===String(id)); if(item&&!Number(item.is_read||0)){ item.is_read=1; if(normalizeType(item.type)!=='message') state.unread=Math.max(0, Number(state.unread||0)-1); state.total=Math.max(0, Number(state.unread||0)+Number(state.messageUnread||0)); render(); } await api('/social/notifications/read',{method:'POST',body:{id:Number(id)}}).catch(()=>{}); }
+    async function poll(){ if(!isLoggedIn()) return; const previous=state.total; const data=await api('/social/notifications/count'); state.unread=Number(data.unread_count||0); state.messageUnread=Number(data.message_unread_count||0); state.total=Number(data.total_unread_count||(state.unread+state.messageUnread)); if(!state.firstPoll&&state.total>previous) toast(state.total-previous===1?'You have a new notification.':'You have new notifications.'); state.firstPoll=false; render(); }
+    async function loadNotifications(markAsRead){ if(!isLoggedIn()) return; const data=await api('/social/notifications'); state.items=data.items||[]; state.unread=Number(data.unread_count||0); state.messageUnread=Number(data.message_unread_count||0); state.total=Number(data.total_unread_count||(state.unread+state.messageUnread)); render(); if(markAsRead&&state.items.length){ await api('/social/notifications/read',{method:'POST',body:{}}); state.unread=0; state.total=state.messageUnread; state.items=state.items.map(item=>Object.assign({},item,{is_read:1})); render(); } }
+    async function markOneRead(id){ if(!id) return; const item=state.items.find(row=>String(row.id)===String(id)); if(item&&!Number(item.is_read||0)){ item.is_read=1; if(normalizeType(item.type)!=='message') state.unread=Math.max(0, Number(state.unread||0)-1); state.total=Math.max(0, Number(state.unread||0)+Number(state.messageUnread||0)); render(); } await api('/social/notifications/read',{method:'POST',body:{id:String(id)}}).catch(()=>{}); }
     function openPost(objectId){ const post=document.querySelector(`.cv-reaction-wrap[data-post-id="${window.CSS && CSS.escape ? CSS.escape(String(objectId)) : String(objectId).replace(/[^a-zA-Z0-9_-]/g,'\\$&')}"]`) || document.querySelector(`[data-post-id="${window.CSS && CSS.escape ? CSS.escape(String(objectId)) : String(objectId).replace(/[^a-zA-Z0-9_-]/g,'\\$&')}"]`); if(post){ post.scrollIntoView({behavior:'smooth',block:'center'}); const card=post.closest('article, .cv-card, .cv-social-card') || post; card.classList.add('cv-feed-notification-target'); setTimeout(()=>card.classList.remove('cv-feed-notification-target'),1800); } }
     const observer=new MutationObserver(function(){ mountHolder(); });
     observer.observe(wrap,{childList:true,subtree:true});
