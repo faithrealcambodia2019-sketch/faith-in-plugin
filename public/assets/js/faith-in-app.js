@@ -4140,9 +4140,11 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         const followersCount = state.profileFollowersCount || 0;
         const followingCount = state.profileFollowingCount || 0;
         const profileDisplayName = state.profileName || (state.currentUser && state.currentUser.name) || 'Faith';
-        const profileJoined = (state.currentUser && state.currentUser.joined) || '9-May-2026';
+        const profileJoined = (state.currentUser && state.currentUser.joined) || 'Member';
         const profileSummary = [state.profileRole, state.profileIndustry, state.profileLocation, state.profileMinistry, state.profileChurch].filter(Boolean).join(' • ') || 'PROFILE / ME';
         const profileStrength = Math.min(100, 55 + (state.profileName ? 10 : 0) + (state.profileBio ? 15 : 0) + (state.profileLocation ? 10 : 0) + ((state.currentUser && state.currentUser.avatar_url) || state.profileImagePreviewUrl ? 5 : 0) + ((state.currentUser && state.currentUser.cover_url) || state.profileCoverPreviewUrl ? 5 : 0));
+        const profileStrengthLabel = profileStrength >= 90 ? 'Complete' : (profileStrength >= 75 ? 'Strong' : 'Getting started');
+        const ownedPostCount = (Array.isArray(state.posts) ? state.posts : []).filter(post => post && (post.can_edit || post.can_delete)).length;
         const active = state.profileSubTab || 'settings';
         const sideItem = (id, icon, label, danger = false) => {
             const shared = `cv-profile-side-button ${active === id ? 'cv-profile-side-button--active' : ''} ${isDark ? 'cv-profile-side-button--dark' : ''}`;
@@ -4250,12 +4252,12 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
             </div>
             <div class="cv-profile-metric-grid">
                 <div class="cv-profile-metric-card">
-                    <div class="cv-profile-metric-head"><span>Profile Views</span><i data-lucide="bar-chart-3" class="w-5 h-5"></i></div>
-                    <div class="cv-profile-metric-main"><strong>${Math.max(1248, followersCount * 84 || 1248).toLocaleString()}</strong><em><i data-lucide="arrow-up-right" class="w-4 h-4"></i>24%</em></div>
+                    <div class="cv-profile-metric-head"><span>Published posts</span><i data-lucide="file-text" class="w-5 h-5"></i></div>
+                    <div class="cv-profile-metric-main"><strong>${ownedPostCount.toLocaleString()}</strong></div>
                 </div>
                 <div class="cv-profile-metric-card">
-                    <div class="cv-profile-metric-head"><span>Interactions</span><i data-lucide="activity" class="w-5 h-5"></i></div>
-                    <div class="cv-profile-metric-main"><strong>${Math.max(856, followingCount * 73 || 856).toLocaleString()}</strong><em><i data-lucide="arrow-up-right" class="w-4 h-4"></i>8%</em></div>
+                    <div class="cv-profile-metric-head"><span>Connections</span><i data-lucide="users" class="w-5 h-5"></i></div>
+                    <div class="cv-profile-metric-main"><strong>${followingCount.toLocaleString()}</strong></div>
                 </div>
             </div>
             <div class="cv-profile-tools-block">
@@ -4269,9 +4271,10 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
             </div>
             <div class="cv-profile-activity-card">
                 <div class="cv-profile-activity-head"><h3>Recent Activity</h3></div>
-                <div class="cv-profile-activity-row"><span><i data-lucide="user" class="w-4 h-4"></i></span><p>New follower: Alex Johnson</p><time>2 hours ago</time></div>
-                <div class="cv-profile-activity-row"><span><i data-lucide="plus" class="w-4 h-4"></i></span><p>You published a new article</p><time>Yesterday</time></div>
-                <div class="cv-profile-activity-row"><span><i data-lucide="badge-check" class="w-4 h-4"></i></span><p>Achievement unlocked: First 100 views</p><time>3 days ago</time></div>
+                <div class="cv-profile-activity-empty" role="status">
+                    <span aria-hidden="true"><i data-lucide="sparkles"></i></span>
+                    <div><strong>Your activity will appear here</strong><p>New posts, resources, and community milestones will be listed as they happen.</p></div>
+                </div>
             </div>
         </div>`;
 
@@ -4302,8 +4305,8 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <button type="button" onclick="cvOpenFollowList('following')"><strong>${followingCount}</strong><span>${followingCount === 1 ? 'connection' : 'connections'}</span></button>
                     </div>
                     <div class="cv-profile-strength">
-                        <div><span>Profile level: <b>Intermediate</b></span><strong></strong></div>
-                        <div class="cv-profile-strength-track"><i style="width:75%"></i></div>
+                        <div><span>Profile level: <b>${profileStrengthLabel}</b></span><strong></strong></div>
+                        <div class="cv-profile-strength-track" role="progressbar" aria-label="Profile completeness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${profileStrength}"><i style="width:${profileStrength}%"></i></div>
                     </div>
                     <div class="cv-profile-modern-menu">
                         ${sideItem('settings', 'settings', 'General Settings')}
@@ -5872,7 +5875,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex justify-between items-start gap-3">
-                                <h3 class="text-[#469b76] font-semibold text-base group-hover:underline leading-tight mb-0.5 truncate">${escapeHtml(job.title || 'Untitled Job')}</h3>
+                                <h3 class="cv-job-card-title text-[#469b76] font-semibold text-base group-hover:underline leading-tight mb-0.5 truncate">${escapeHtml(job.title || 'Untitled Job')}</h3>
                                 <button type="button" class="text-black/60 hover:text-black/90 hidden md:block" aria-label="Save job">
                                     <i data-lucide="bookmark" class="w-5 h-5"></i>
                                 </button>
@@ -5882,8 +5885,8 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                             <div class="flex items-center gap-3 mt-2 flex-wrap">
                                 <span class="text-black/60 text-xs font-semibold flex items-center gap-1 bg-[#f3f2ef] px-2 py-0.5 rounded-sm">${escapeHtml(type)}</span>
                                 ${isNew ? `
-                                    <span class="text-[#469b76] font-semibold text-xs flex items-center gap-1">
-                                        <span class="w-3.5 h-3.5 bg-[#469b76] rounded-full flex items-center justify-center text-white text-[8px] font-bold">✓</span>
+                                    <span class="cv-job-new-label text-[#469b76] font-semibold text-xs flex items-center gap-1">
+                                        <span class="cv-job-new-check w-3.5 h-3.5 bg-[#469b76] rounded-full flex items-center justify-center text-white text-[8px] font-bold">✓</span>
                                         New Listing
                                     </span>` : `
                                     <span class="text-black/60 text-xs font-semibold flex items-center gap-1">

@@ -9,6 +9,10 @@
 #cv-root {
   --fi-color-brand: #4f46e5;
   --fi-color-brand-strong: #4338ca;
+  --fi-color-brand-blue: #1d4ed8;
+  --fi-color-accent: #7c3aed;
+  --fi-color-brand-soft: #eef2ff;
+  --fi-gradient-brand: linear-gradient(135deg, #1d4ed8 0%, #4f46e5 58%, #7c3aed 100%);
   --fi-color-ink: #172033;
   --fi-color-muted: #64748b;
   --fi-color-surface: #ffffff;
@@ -42,6 +46,281 @@
 #cv-root :where(button, a, input, textarea, select, summary):focus-visible {
   outline: 3px solid rgba(79, 70, 229, 0.32) !important;
   outline-offset: 3px !important;
+}
+
+/* FaithIn brand alignment: blue-to-indigo wordmark colors drive all primary UI. */
+html body #cv-root button[class*="bg-brand-vault"],
+html body #cv-root button[class*="bg-brand-dark"],
+html body #cv-root button[class*="bg-blue"] {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.18) !important;
+}
+
+html body #cv-root button[class*="bg-brand-vault"]:hover,
+html body #cv-root button[class*="bg-brand-dark"]:hover,
+html body #cv-root button[class*="bg-blue"]:hover {
+  border-color: var(--fi-color-brand-strong) !important;
+  background: linear-gradient(135deg, #1e40af, #4338ca 62%, #6d28d9) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+/* Restore semantic colors that the legacy visibility layer treated as teal. */
+html body #cv-root button[class*="bg-rose"] {
+  border-color: #dc2626 !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+}
+
+html body #cv-root button[class*="bg-emerald"] {
+  border-color: #059669 !important;
+  background: #059669 !important;
+  color: #fff !important;
+}
+
+html body #cv-root :where(.text-brand-vault, button[class*="text-brand-vault"]) {
+  color: var(--fi-color-brand) !important;
+  -webkit-text-fill-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root :where(input:not([type="file"]), textarea, select):focus {
+  border-color: var(--fi-color-brand) !important;
+  outline-color: rgba(79, 70, 229, 0.2) !important;
+}
+
+html body #cv-root :where(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-auth-dream__submit {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.2) !important;
+}
+
+html body #cv-root .cv-auth-dream__submit:hover {
+  border-color: var(--fi-color-brand-strong) !important;
+  background: linear-gradient(135deg, #1e40af, #4338ca 62%, #6d28d9) !important;
+  color: #fff !important;
+}
+
+html body #cv-root .cv-auth-dream__create {
+  border-color: #c7d2fe !important;
+  background: #fff !important;
+  color: var(--fi-color-brand-strong) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-strong) !important;
+}
+
+html body #cv-root .cv-auth-dream__create:hover {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-color-brand-soft) !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-tile.is-active,
+html body #cv-root .cv-mobile-bottom-item.is-active {
+  color: var(--fi-color-brand-blue) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-feed-shortcut.is-active {
+  border-color: #dbeafe !important;
+  background: linear-gradient(90deg, #eff6ff, #eef2ff) !important;
+  color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-feed-shortcut.is-active i {
+  color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-library-category.is-active {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+html body #cv-root .cv-library-category:hover:not(.is-active) {
+  border-color: #818cf8 !important;
+  background: var(--fi-color-brand-soft) !important;
+  color: var(--fi-color-brand-strong) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-strong) !important;
+}
+
+html body #cv-root .cv-library-detail__meta span {
+  color: var(--fi-color-brand) !important;
+  -webkit-text-fill-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-library-action--primary,
+html body #cv-root .cv-library-action--primary.is-downloaded {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+}
+
+html body #cv-root .cv-job-board-v556 .cv-job-primary-btn,
+html body #cv-root .cv-job-board-v556 .cv-job-filter-pill.cv-job-filter-active {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+html body #cv-root .cv-job-board-v556 .cv-job-primary-btn:hover,
+html body #cv-root .cv-job-board-v556 .cv-job-filter-pill.cv-job-filter-active:hover {
+  border-color: var(--fi-color-brand-strong) !important;
+  background: linear-gradient(135deg, #1e40af, #4338ca 62%, #6d28d9) !important;
+}
+
+html body #cv-root .cv-job-board-v556 .cv-job-outline-btn {
+  border-color: var(--fi-color-brand) !important;
+  background: transparent !important;
+  color: var(--fi-color-brand) !important;
+  -webkit-text-fill-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-job-board-v556 .cv-job-outline-btn:hover {
+  border-color: var(--fi-color-brand-strong) !important;
+  background: var(--fi-color-brand-soft) !important;
+  color: var(--fi-color-brand-strong) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-strong) !important;
+}
+
+html body #cv-root :where(.cv-job-card-title, .cv-job-new-label) {
+  color: var(--fi-color-brand) !important;
+  -webkit-text-fill-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-job-new-check {
+  background: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-network-connect-btn.is-connect,
+html body #cv-root .cv-network-connect-btn.is-self {
+  border-color: #a5b4fc !important;
+  background: #fff !important;
+  color: var(--fi-color-brand-strong) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-strong) !important;
+}
+
+html body #cv-root .cv-network-connect-btn:is(.is-connect, .is-self):hover {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-color-brand-soft) !important;
+}
+
+html body #cv-root [class*="cv-network-cover--"] {
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 55%, #ede9fe 100%) !important;
+}
+
+html body #cv-root .cv-profile-modern-tabs button.is-active {
+  color: var(--fi-color-brand) !important;
+  -webkit-text-fill-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-profile-modern-tabs button.is-active::after,
+html body #cv-root .cv-profile-strength-track i {
+  background: var(--fi-gradient-brand) !important;
+}
+
+html body #cv-root .cv-profile-modern-media-actions button {
+  border-color: #c7d2fe !important;
+  background: #fff !important;
+  color: var(--fi-color-brand-blue) !important;
+  -webkit-text-fill-color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-profile-modern-media-actions button:hover {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-color-brand-soft) !important;
+}
+
+html body #cv-root .cv-profile-new-post {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+html body #cv-root .cv-profile-top-stat__value {
+  color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-profile-activity-empty {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 28px;
+  color: var(--fi-color-muted);
+  text-align: left;
+}
+
+html body #cv-root .cv-profile-activity-empty > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  flex: 0 0 48px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--fi-color-brand-soft);
+  color: var(--fi-color-brand);
+}
+
+html body #cv-root .cv-profile-activity-empty svg {
+  width: 22px;
+  height: 22px;
+}
+
+html body #cv-root .cv-profile-activity-empty strong {
+  display: block;
+  color: var(--fi-color-ink);
+  font-size: 15px;
+}
+
+html body #cv-root .cv-profile-activity-empty p {
+  max-width: 52ch;
+  margin: 4px 0 0;
+  color: var(--fi-color-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+html body #cv-root .cv-social-post-actions button.is-active {
+  border-color: var(--fi-color-brand) !important;
+  background: var(--fi-color-brand) !important;
+  color: #fff !important;
+}
+
+html body #cv-root .cv-feed-messenger-panel {
+  --cv-chat-green: var(--fi-color-brand) !important;
+  --cv-react-msg-green: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-profile-avatar-fallback {
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+html body #cv-root .cv-social-spinner {
+  border-top-color: var(--fi-color-brand) !important;
+}
+
+html body .dark #cv-root :where(.cv-auth-dream__create, .cv-network-connect-btn.is-connect, .cv-network-connect-btn.is-self, .cv-profile-modern-media-actions button) {
+  border-color: #6366f1 !important;
+  background: #172033 !important;
+  color: #c7d2fe !important;
+  -webkit-text-fill-color: #c7d2fe !important;
+}
+
+html body .dark #cv-root .cv-profile-activity-empty > span {
+  background: rgba(79, 70, 229, 0.2) !important;
+  color: #c7d2fe !important;
 }
 
 #cv-root .cv-feed-page-linkedin,
