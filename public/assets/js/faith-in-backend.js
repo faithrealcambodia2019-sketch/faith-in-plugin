@@ -502,8 +502,11 @@
                 update['reactions.' + user.uid] = removing ? b.dbMod.deleteField() : reaction;
 
                 return b.dbMod.updateDoc(ref, update).then(function () {
+                    // `reaction` is the field the caller reads to repaint the
+                    // button; an empty string means "no reaction".
                     return {
                         id: id,
+                        reaction: removing ? '' : reaction,
                         likes: count,
                         reaction_count: count,
                         user_reaction: removing ? null : reaction,
@@ -528,19 +531,24 @@
                     content: body,
                     createdAt: b.dbMod.serverTimestamp()
                 };
-                return b.dbMod.addDoc(b.dbMod.collection(b.db, 'posts', id, 'comments'), comment).then(function (ref) {
-                    b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), {
-                        comment_count: b.dbMod.increment(1)
-                    }).catch(function () {});
-                    return {
-                        id: ref.id,
-                        comment: {
+                var postRef = b.dbMod.doc(b.db, 'posts', id);
+                return b.dbMod.getDoc(postRef).then(function (snap) {
+                    var nextCount = parseInt((snap.exists() ? snap.data().comment_count : 0) || 0, 10) + 1;
+                    return b.dbMod.addDoc(b.dbMod.collection(b.db, 'posts', id, 'comments'), comment).then(function (ref) {
+                        b.dbMod.updateDoc(postRef, {
+                            comment_count: b.dbMod.increment(1)
+                        }).catch(function () {});
+                        return {
                             id: ref.id,
-                            content: body,
-                            time: 'just now',
-                            author: comment.author
-                        }
-                    };
+                            comment_count: nextCount,
+                            comment: {
+                                id: ref.id,
+                                content: body,
+                                time: 'just now',
+                                author: comment.author
+                            }
+                        };
+                    });
                 });
             });
         });
@@ -550,7 +558,22 @@
         return requireUser(b).then(function (user) {
             var list = files['post_media[]'] || files['media[]'] || files.file || [];
             return uploadAll(b, user, list, onProgress).then(function (items) {
-                return { staged_media: items, items: items, ready: true };
+                // The caller checks `response.data.media_items` and reads
+                // `response.data.media_type`. Returning any other shape makes it
+                // treat a successful upload as a failure and toast the raw
+                // object as "[object Object]".
+                var mode = text(params.post_media_type);
+                if (!mode) {
+                    mode = items.some(function (i) { return i.type === 'video'; }) ? 'reel' : 'gallery';
+                }
+                return {
+                    media_items: items,
+                    media_type: mode,
+                    // Kept for any caller still reading the older names.
+                    staged_media: items,
+                    items: items,
+                    ready: true
+                };
             });
         });
     };
@@ -571,7 +594,10 @@
                 if (uploaded.length) update.photoURL = uploaded[0].url;
 
                 return b.dbMod.updateDoc(ref, update)
-                    .then(function () { return loadProfile(b, user); });
+                    .then(function () { return loadProfile(b, user); })
+                    // The caller reads `response.data.user`; keep the profile at
+                    // the top level too for callers that read it directly.
+                    .then(function (profile) { return Object.assign({ user: profile }, profile); });
             });
         });
     };
@@ -595,10 +621,18 @@
         var id = text(params.post_id || params.id);
         if (!id) throw new Error('That post could not be found.');
         return requireUser(b).then(function () {
-            var update = {};
-            update[field] = b.dbMod.increment(1);
-            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), update).then(function () {
-                return { id: id, ok: true };
+            var ref = b.dbMod.doc(b.db, 'posts', id);
+            return b.dbMod.getDoc(ref).then(function (snap) {
+                if (!snap.exists()) throw new Error('That post is no longer available.');
+                var next = parseInt(snap.data()[field] || 0, 10) + 1;
+                var update = {};
+                update[field] = b.dbMod.increment(1);
+                return b.dbMod.updateDoc(ref, update).then(function () {
+                    // The caller reads back the new count by field name.
+                    var out = { id: id, ok: true };
+                    out[field] = next;
+                    return out;
+                });
             });
         });
     }
@@ -721,8 +755,16 @@
             var ref = b.dbMod.doc(b.db, 'resources', id);
             return b.dbMod.getDoc(ref).then(function (snap) {
                 if (!snap.exists()) throw new Error('That resource is no longer available.');
+                var data = snap.data();
+                var downloads = parseInt(data.download_count || 0, 10) + 1;
                 b.dbMod.updateDoc(ref, { download_count: b.dbMod.increment(1) }).catch(function () {});
-                return { id: id, url: text(snap.data().file_url), download_url: text(snap.data().file_url) };
+                return {
+                    id: id,
+                    url: text(data.file_url),
+                    download_url: text(data.file_url),
+                    filename: text(data.filename),
+                    downloads: downloads
+                };
             });
         });
     };
@@ -1018,7 +1060,8 @@
                 var ref = b.dbMod.doc(b.db, 'follows', followId(user.uid, uid));
                 if (!follow) {
                     return b.dbMod.deleteDoc(ref).then(function () {
-                        return { following: false, uid: uid, user_id: targetId };
+                        // `is_following` is the field the caller reads.
+                        return { is_following: false, following: false, uid: uid, user_id: targetId };
                     });
                 }
                 return b.dbMod.setDoc(ref, {
@@ -1026,7 +1069,7 @@
                     targetUid: uid,
                     createdAt: b.dbMod.serverTimestamp()
                 }).then(function () {
-                    return { following: true, uid: uid, user_id: targetId };
+                    return { is_following: true, following: true, uid: uid, user_id: targetId };
                 });
             });
         });
