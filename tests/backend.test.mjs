@@ -325,7 +325,59 @@ uploadStatus = 200; uploadBody = null;
 r = await call(fd([['action','cv_create_post'],['content','big'],['post_media[]', new FakeFile('huge.mp4','video/mp4', 40*1024*1024)]]));
 check('oversize rejected before upload', r.success === false && /25MB/.test(r.data), r.data);
 
-console.log('\n17) Non-cv request passes through');
+console.log('\n17) Response shapes the app actually reads');
+// These field names are read directly by faith-in-app.js. A mismatch makes the
+// app treat success as failure and toast the raw object as "[object Object]",
+// which is exactly what happened with cv_stage_post_media.
+uploadStatus = 200; uploadBody = null;
+r = await call(fd([['action','cv_stage_post_media'],['post_media[]', new FakeFile('p.jpg','image/jpeg',10)]]));
+check('stage returns media_items', Array.isArray(r.data.media_items) && r.data.media_items.length === 1, r.data);
+check('stage returns media_type', typeof r.data.media_type === 'string' && r.data.media_type.length > 0, r.data);
+r = await call(fd([['action','cv_stage_post_media'],['post_media[]', new FakeFile('v.mp4','video/mp4',10)]]));
+check('video stages as reel', r.data.media_type === 'reel', r.data.media_type);
+
+const sp = postIds()[0];
+r = await call({ action:'cv_like_post', post_id: sp, reaction:'pray' });
+check('like returns reaction', r.data.reaction === 'pray', r.data);
+check('like returns likes', typeof r.data.likes === 'number', r.data);
+r = await call({ action:'cv_like_post', post_id: sp, reaction:'pray' });
+check('un-react returns empty reaction', r.data.reaction === '', r.data);
+
+r = await call({ action:'cv_share_post', post_id: sp });
+check('share returns share_count', r.data.share_count === 1, r.data);
+r = await call({ action:'cv_repost_post', post_id: sp });
+check('repost returns repost_count', r.data.repost_count === 1, r.data);
+
+r = await call({ action:'cv_create_post_comment', post_id: sp, comment:'Amen' });
+check('comment returns comment', !!(r.data.comment && r.data.comment.content === 'Amen'), r.data);
+check('comment returns comment_count', typeof r.data.comment_count === 'number' && r.data.comment_count > 0, r.data);
+
+store['users/uid-follow2'] = { uid:'uid-follow2', displayName:'Bopha', email:'b@x.com', appUserId: 99 };
+r = await call({ action:'cv_social_follow_user', target_uid:'uid-follow2' });
+check('follow returns is_following true', r.data.is_following === true, r.data);
+r = await call({ action:'cv_social_unfollow_user', target_uid:'uid-follow2' });
+check('unfollow returns is_following false', r.data.is_following === false, r.data);
+
+const rid2 = Object.keys(store).find(k=>k.startsWith('resources/')).slice(10);
+r = await call({ action:'cv_download_resource', resource_id: rid2 });
+check('download returns url', typeof r.data.url === 'string', r.data);
+check('download returns filename', 'filename' in r.data, r.data);
+check('download returns downloads count', typeof r.data.downloads === 'number', r.data);
+
+r = await call(fd([['action','cv_update_profile'],['name','Hun Chet Updated']]));
+check('profile returns data.user', !!(r.data.user && r.data.user.name === 'Hun Chet Updated'), r.data);
+
+// Every failure message must be a plain string, never an object.
+const failures = [
+  await call({ action:'cv_delete_post' }),
+  await call({ action:'cv_create_prayer', content:'' }),
+  await call({ action:'cv_create_job', job_title:'' }),
+  await call({ action:'cv_bible_ai_image' })
+];
+check('all failure messages are strings', failures.every(f => f.success === false && typeof f.data === 'string'),
+  failures.map(f => typeof f.data));
+
+console.log('\n18) Non-cv request passes through');
 const t = transportFactory({ url:'https://example.com/thing' }, { url:'https://example.com/thing', data:{} });
 check('not intercepted', t === undefined);
 
