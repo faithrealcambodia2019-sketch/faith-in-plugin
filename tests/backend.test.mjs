@@ -72,28 +72,49 @@ const dbMod = {
   }
 };
 
-const uploaded = [];
-const storageMod = {
-  getStorage: () => ({}),
-  ref: (s, path) => ({ path }),
-  uploadBytesResumable: (ref, file) => {
-    uploaded.push({ path: ref.path, name: file.name });
-    return {
-      snapshot: { ref },
-      on: (evt, prog, err, done) => { prog({ bytesTransferred: file.size, totalBytes: file.size }); done(); }
-    };
-  },
-  getDownloadURL: async (ref) => 'https://storage.example/' + encodeURIComponent(ref.path)
-};
+const uploaded = [];   // files the fake /api/upload received
+let uploadStatus = 200;
+let uploadBody = null;
 
-const USER = { uid: 'uid-abc', email: 'Hun@Faithin.co', displayName: 'Hun Chet', photoURL: '', providerData: [{providerId:'password'}] };
+// Fake XMLHttpRequest standing in for the browser's, so uploadAll() can be
+// exercised end to end against a stubbed /api/upload.
+class FakeXHR {
+  constructor(){ this.upload = { onprogress: null }; this.status = 0; this.responseText = ''; }
+  open(method, url){ this.method = method; this.url = url; }
+  setRequestHeader(k, v){ (this.headers = this.headers || {})[k] = v; }
+  send(form){
+    const files = form._e.filter(([k]) => k === 'files').map(([, v]) => v);
+    files.forEach(f => uploaded.push({
+      path: 'faith-in/uid-abc/' + f.name,
+      name: f.name,
+      auth: this.headers && this.headers.Authorization
+    }));
+    if (this.upload.onprogress) this.upload.onprogress({ lengthComputable: true, loaded: 1, total: 1 });
+    this.status = uploadStatus;
+    this.responseText = JSON.stringify(uploadBody !== null ? uploadBody : {
+      success: true,
+      data: { items: files.map(f => ({
+        url: 'https://blob.example/' + f.name,
+        local_url: 'https://blob.example/' + f.name,
+        preview_url: 'https://blob.example/' + f.name,
+        drive_url: '',
+        type: /^video\//.test(f.type) ? 'video' : (/^audio\//.test(f.type) ? 'audio' : 'image'),
+        mime: f.type, name: f.name, size: f.size,
+        path: 'faith-in/uid-abc/' + f.name
+      })) }
+    });
+    if (this.onload) this.onload();
+  }
+}
+
+const USER = { uid: 'uid-abc', email: 'Hun@Faithin.co', displayName: 'Hun Chet', photoURL: '', providerData: [{providerId:'password'}], getIdToken: async () => 'fake-id-token' };
 const authMod = { getAuth: () => ({ currentUser: USER }), onAuthStateChanged: (a,cb)=>{cb(USER); return ()=>{};}, signOut: async()=>{} };
 const appMod = { getApps: () => [], initializeApp: () => ({ name:'faith-in-auth' }) };
 
 const ctx = {
   window: { cv_ajax: { ajax_url: '/api/compat', auth: { firebase_config: { apiKey:'k', projectId:'p' }, site_origin:'https://faithin.co' } }, jQuery: $, console },
   console, setTimeout, clearInterval, setInterval, FormData: FakeFormData, File: FakeFile, Blob: globalThis.Blob,
-  ProgressEvent: globalThis.ProgressEvent, Date, Math, Promise, Object, Array, String, JSON, parseInt, encodeURIComponent, decodeURIComponent
+  ProgressEvent: globalThis.ProgressEvent, XMLHttpRequest: FakeXHR, Date, Math, Promise, Object, Array, String, JSON, parseInt, encodeURIComponent, decodeURIComponent
 };
 ctx.globalThis = ctx;
 vm.createContext(ctx);
@@ -102,7 +123,7 @@ const wrapped = src.replace(/import\((.*?)\)/g, '__imp($1)');
 ctx.__imp = (u) => Promise.resolve(
   u.includes('firebase-app.js') ? appMod :
   u.includes('firebase-auth.js') ? authMod :
-  u.includes('firebase-firestore.js') ? dbMod : storageMod
+  dbMod
 );
 vm.runInContext(wrapped, ctx);
 
@@ -158,7 +179,8 @@ r = await call(fd([['action','cv_create_post'],['content','Sunday service'],
   ['post_media[]', new FakeFile('clip.mp4','video/mp4',2048)]]));
 check('success', r.success === true, r);
 check('2 files uploaded', uploaded.length === 2, uploaded);
-check('path scoped to uid', uploaded[0].path.startsWith('faith-in-uploads/uid-abc/'), uploaded[0].path);
+check('path scoped to uid', uploaded[0].path.startsWith('faith-in/uid-abc/'), uploaded[0].path);
+check('sends bearer token', uploaded[0].auth === 'Bearer fake-id-token', uploaded[0].auth);
 const withMedia = allPosts().find(p => p.media_items.length === 2);
 check('media_items saved', !!withMedia);
 check('image typed', withMedia.media_items[0].type === 'image', withMedia.media_items[0].type);
@@ -291,7 +313,19 @@ check('notes saved', r.success === true && store['users/uid-abc/bible/sermonNote
 r = await call({ action:'cv_bible_get_notes' });
 check('notes read back', r.data.notes.Doctrine === 'Grace');
 
-console.log('\n16) Non-cv request passes through');
+console.log('\n16) Upload failure handling');
+uploadStatus = 401;
+uploadBody = { success: false, data: 'Your session has expired. Please log in again.' };
+r = await call(fd([['action','cv_create_post'],['content','x'],['post_media[]', new FakeFile('a.jpg','image/jpeg',10)]]));
+check('surfaces server message', r.success === false && /session has expired/.test(r.data), r.data);
+uploadStatus = 500; uploadBody = null;
+r = await call(fd([['action','cv_stage_post_media'],['post_media[]', new FakeFile('b.jpg','image/jpeg',10)]]));
+check('generic message on 500', r.success === false && /Upload failed/.test(r.data), r.data);
+uploadStatus = 200; uploadBody = null;
+r = await call(fd([['action','cv_create_post'],['content','big'],['post_media[]', new FakeFile('huge.mp4','video/mp4', 40*1024*1024)]]));
+check('oversize rejected before upload', r.success === false && /25MB/.test(r.data), r.data);
+
+console.log('\n17) Non-cv request passes through');
 const t = transportFactory({ url:'https://example.com/thing' }, { url:'https://example.com/thing', data:{} });
 check('not intercepted', t === undefined);
 
