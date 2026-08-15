@@ -6,3 +6,7 @@ node_modules
 npm-debug.log*
 .DS_Store
 tsconfig.tsbuildinfo
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+_to_delete/

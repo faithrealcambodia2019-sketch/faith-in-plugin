@@ -174,8 +174,17 @@
     function safeImageUrl(value, fallback) {
         const url = String(value || '').trim();
         if (!url) return fallback;
-        if (/^(https?:|data:image\/|\/)/i.test(url)) return url;
-        return fallback;
+        if (/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/=]+$/i.test(url)) return url;
+        try {
+            const parsed = new URL(url, window.location.origin);
+            if (!['https:', 'blob:'].includes(parsed.protocol)) return fallback;
+            if (url.charAt(0) === '/' && url.charAt(1) !== '/') {
+                return parsed.pathname + parsed.search + parsed.hash;
+            }
+            return parsed.href;
+        } catch (error) {
+            return fallback;
+        }
     }
 
     function hasKhmerText(value) {
@@ -343,13 +352,6 @@
                 label: raw.label || (rawType === 'blue' ? 'Founder' : (rawType === 'purple' ? 'First 25' : 'Gmail')),
                 title: raw.title || (rawType === 'blue' ? 'Founder account' : (rawType === 'purple' ? 'First 25 member' : 'Verified Gmail account'))
             };
-        }
-        const email = String(user.email || '').trim().toLowerCase();
-        if (email === 'hunchet2030@gmail.com') {
-            return { show: true, type: 'blue', label: 'Founder', title: 'Founder account' };
-        }
-        if (/@gmail\.com$/.test(email)) {
-            return { show: true, type: 'yellow', label: 'Gmail', title: 'Verified Gmail account' };
         }
         return null;
     }
@@ -848,7 +850,7 @@ function renderUnifiedAuthCard() {
             <section class="cv-auth-dream__left" aria-label="Faith In welcome">
                 <div class="cv-auth-dream__hero">
                     <h1>Explore <br />the community <br /><span>you belong to.</span></h1>
-                    <p>Read the Khmer Bible beside KJV, NIV and ESV. Share posts, blessings and prayer with a community that shares your faith.</p>
+                    <p>Prepare bilingual Bible notes. Share posts, blessings and prayer with a community that shares your faith.</p>
                 </div>
                 <div class="cv-auth-dream__collage" aria-hidden="true">
                     <div class="cv-auth-dream__card cv-auth-dream__card--orange">
@@ -940,6 +942,7 @@ function renderUnifiedAuthCard() {
                             <div class="cv-auth-dream__forgot"><a href="#" role="button" class="cv-auth-dream__text-link" onclick="return sendFirebasePasswordReset(event)">Forgotten password?</a></div>
                             <div class="cv-auth-dream__divider"><span>Or sign in with</span></div>
                             <div id="cv-google-signin" class="cv-google-signin cv-auth-dream__google cv-auth-dream__google--login"></div>
+                            ${cvGithubEnabled() ? `<button type="button" class="cv-faith-google-btn cv-faith-github-btn" onclick="return startFirebaseGithubSignIn(event)" ${buttonDisabled}><span class="cv-faith-google-btn__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6a4.7 4.7 0 0 1 1.2-3.2c-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0C17 4.3 18 4.6 18 4.6c.6 1.6.2 2.9.1 3.2a4.7 4.7 0 0 1 1.2 3.2c0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg></span><span>${loading ? 'Opening GitHub...' : 'Continue with GitHub'}</span></button>` : ''}
                             <div class="cv-auth-dream__rule"></div>
                             <button type="button" onclick="return cvOpenRegisterLink(event)" class="cv-auth-dream__create">Create new account</button>
                         </div>
@@ -1010,6 +1013,10 @@ function syncAuthUserIntoForms(user) {
 
 function cvGoogleClientId() {
     return (typeof cv_ajax !== 'undefined' && cv_ajax.auth && cv_ajax.auth.google_client_id) ? String(cv_ajax.auth.google_client_id) : '';
+}
+
+function cvGithubEnabled() {
+    return !!(typeof cv_ajax !== 'undefined' && cv_ajax.auth && cv_ajax.auth.github_enabled === true);
 }
 
 let cvGoogleIdentityReady = false;
@@ -1269,6 +1276,8 @@ function cvFirebaseErrorMessage(error) {
             return 'That password is incorrect.';
         case 'auth/email-already-in-use':
             return 'An account already exists for this email. Please log in instead.';
+        case 'auth/account-exists-with-different-credential':
+            return 'An account already uses this email. Sign in with the method you originally used, then connect GitHub from your account.';
         case 'auth/weak-password':
             return 'Please choose a stronger password with at least 6 characters.';
         case 'auth/invalid-email':
@@ -1282,17 +1291,15 @@ function cvFirebaseErrorMessage(error) {
         case 'auth/network-request-failed':
             return 'Network error. Please check your connection and try again.';
         case 'auth/unauthorized-domain':
-            return 'Google sign-in needs this domain added in Firebase. Add ' + cvCurrentSiteDomain() + ' under Firebase Authentication > Settings > Authorized domains, then refresh.';
+            return 'Social sign-in is not available on this site yet. Please use email and password or contact support.';
         case 'auth/configuration-not-found':
         case 'auth/operation-not-allowed':
-            // Almost always means Google has not been switched on as a sign-in
-            // provider in the Firebase console.
-            return 'Google sign-in is not enabled for this project yet. Enable it in Firebase Console > Authentication > Sign-in method > Google, then refresh.';
+            return 'That sign-in method is not available yet. Please use email and password.';
         case 'permission-denied':
         case 'firestore/permission-denied':
-            return 'Your account was created, but Firestore blocked saving the profile. Check the users/{uid} Firestore rule and try logging in.';
+            return 'We could not finish setting up your profile. Please try again or contact support.';
         default:
-            return (error && error.message) ? error.message : 'Login failed. Please try again.';
+            return 'Login could not be completed. Please try again.';
     }
 }
 
@@ -1326,7 +1333,25 @@ function cvCreateOrUpdateFirestoreUser(bundle, user, options) {
         docData.createdAt = timestamp;
         docData.status = 'active';
     }
-    return firestore.setDoc(firestore.doc(bundle.db, 'users', user.uid), docData, { merge: true });
+    const publicData = {
+        uid: user.uid,
+        displayName: docData.displayName,
+        photoURL: docData.photoURL,
+        appUserId: docData.appUserId,
+        updatedAt: timestamp
+    };
+    if (options.isNew) publicData.createdAt = timestamp;
+
+    // Account data (including email and settings) stays private in /users.
+    // The member directory reads the deliberately email-free projection.
+    return firestore.setDoc(firestore.doc(bundle.db, 'users', user.uid), docData, { merge: true })
+        .then(function() {
+            return firestore.setDoc(
+                firestore.doc(bundle.db, 'publicProfiles', user.uid),
+                publicData,
+                { merge: true }
+            );
+        });
 }
 
 function cvStringHash(value) {
@@ -1576,6 +1601,52 @@ window.startFirebaseGoogleSignIn = (event) => {
                 return;
             }
 
+            window.showToast(cvFirebaseErrorMessage(error), 'error');
+        })
+        .finally(function() {
+            setState({ authLoading: false });
+        });
+    return false;
+};
+
+window.startFirebaseGithubSignIn = (event) => {
+    if (event && event.preventDefault) event.preventDefault();
+    if (!cvGithubEnabled() || state.authLoading) return false;
+    setState({ authLoading: true, authErrors: {} });
+    cvGetFirebaseAuthBundle()
+        .then(function(bundle) {
+            const provider = new bundle.authModule.GithubAuthProvider();
+            provider.addScope('read:user');
+            provider.addScope('user:email');
+            return bundle.authModule.signInWithPopup(bundle.auth, provider)
+                .then(function(result) { return { bundle: bundle, result: result }; });
+        })
+        .then(function(payload) {
+            const info = payload.bundle.authModule.getAdditionalUserInfo
+                ? payload.bundle.authModule.getAdditionalUserInfo(payload.result)
+                : null;
+            return cvCreateOrUpdateFirestoreUser(payload.bundle, payload.result.user, {
+                provider: 'github',
+                isNew: !!(info && info.isNewUser)
+            }).then(function() {
+                return cvFirebaseServerLogin(payload.result.user, 'github');
+            });
+        })
+        .then(function(profile) {
+            cvCompleteAuth(profile || {});
+            window.showToast('Signed in with GitHub.', 'success');
+        })
+        .catch(function(error) {
+            const code = error && error.code ? String(error.code) : '';
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+            if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                return cvGetFirebaseAuthBundle().then(function(bundle) {
+                    const provider = new bundle.authModule.GithubAuthProvider();
+                    provider.addScope('read:user');
+                    provider.addScope('user:email');
+                    return bundle.authModule.signInWithRedirect(bundle.auth, provider);
+                });
+            }
             window.showToast(cvFirebaseErrorMessage(error), 'error');
         })
         .finally(function() {
@@ -2144,7 +2215,7 @@ window.submitAuthCard = (event) => window.loginWithEmailPassword(event);
                 return 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(driveId);
             }
         } catch (e) {}
-        return url;
+        return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
     }
 
     function cvResourceById(id) {
@@ -2715,8 +2786,13 @@ window.startSocialSignup = (provider) => {
     const label = provider === 'apple' ? 'Apple' : 'TikTok';
     const url = provider === 'apple' ? auth.apple_oauth_url : auth.tiktok_oauth_url;
     if (url) {
-        window.location.href = url;
-        return;
+        try {
+            const target = new URL(String(url), window.location.origin);
+            if (target.protocol === 'https:') {
+                window.location.assign(target.href);
+                return;
+            }
+        } catch (error) {}
     }
     window.showToast(label + ' sign-up needs OAuth setup in Faith In settings first.', 'info');
 };

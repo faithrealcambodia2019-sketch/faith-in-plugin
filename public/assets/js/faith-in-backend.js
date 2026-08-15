@@ -128,6 +128,39 @@
         return (v === 'private' || v === 'followers') ? v : 'public';
     }
 
+    function httpsUrl(value) {
+        var url = text(value, 2048);
+        return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
+    }
+
+    function emailAddress(value) {
+        var email = text(value, 320);
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+    }
+
+    function normalizeMediaItem(item) {
+        if (!item || typeof item !== 'object') return null;
+        var url = text(item.url || item.local_url || item.preview_url, 2048);
+        var isPreset = /^\/assets\/audio\/blessings\/[a-z0-9-]+\.mp3$/i.test(url);
+        if (!isPreset) url = httpsUrl(url);
+        if (!url) return null;
+        var mime = text(item.mime, 120).toLowerCase();
+        var type = text(item.type, 20).toLowerCase();
+        if (['image', 'video', 'audio', 'file'].indexOf(type) === -1) type = 'file';
+        return {
+            url: url,
+            local_url: url,
+            preview_url: url,
+            drive_url: '',
+            type: type,
+            mime: mime,
+            name: text(item.name, 160),
+            size: Math.max(0, parseInt(item.size || 0, 10) || 0),
+            path: text(item.path, 500),
+            is_blessing_music: item.is_blessing_music === true
+        };
+    }
+
     function relativeTime(date) {
         if (!date) return 'just now';
         var secs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
@@ -183,6 +216,37 @@
         };
     }
 
+    function publicProfileDocument(b, user, data) {
+        var source = data || {};
+        var email = text(user.email || source.email);
+        var name = text(source.displayName || user.displayName || (email ? email.split('@')[0] : '') || 'Faith In Member', 120);
+        return {
+            uid: user.uid,
+            displayName: name,
+            photoURL: text(source.photoURL || user.photoURL, 2048),
+            coverURL: text(source.coverURL, 2048),
+            bio: text(source.bio, 1000),
+            role: text(source.role, 160),
+            gender: text(source.gender, 80),
+            location: text(source.location, 160),
+            industry: text(source.industry, 160),
+            church: text(source.church, 200),
+            ministry: text(source.ministry, 200),
+            appUserId: parseInt(source.appUserId || numericId(user.uid), 10),
+            verification: source.verification || null,
+            createdAt: source.createdAt || b.dbMod.serverTimestamp(),
+            updatedAt: b.dbMod.serverTimestamp()
+        };
+    }
+
+    function syncPublicProfile(b, user, data) {
+        return b.dbMod.setDoc(
+            b.dbMod.doc(b.db, 'publicProfiles', user.uid),
+            publicProfileDocument(b, user, data),
+            { merge: true }
+        );
+    }
+
     /** Reads the user's profile document, creating it on first sign-in. */
     function loadProfile(b, user) {
         var ref = b.dbMod.doc(b.db, 'users', user.uid);
@@ -190,7 +254,10 @@
             if (snap.exists()) {
                 // Touch lastLoginAt; failure here must not block sign-in.
                 b.dbMod.updateDoc(ref, { lastLoginAt: b.dbMod.serverTimestamp() }).catch(function () {});
-                return profileFor(user, snap.data());
+                var existing = snap.data();
+                return syncPublicProfile(b, user, existing)
+                    .catch(function () {})
+                    .then(function () { return profileFor(user, existing); });
             }
             var email = text(user.email);
             var name = text(user.displayName || (email ? email.split('@')[0] : '') || 'Faith In Member');
@@ -213,7 +280,9 @@
                 status: 'active'
             };
             return b.dbMod.setDoc(ref, fresh).then(function () {
-                return profileFor(user, fresh);
+                return syncPublicProfile(b, user, fresh)
+                    .catch(function () {})
+                    .then(function () { return profileFor(user, fresh); });
             });
         });
     }
@@ -388,7 +457,7 @@
                 }
 
                 return uploadAll(b, user, mediaFiles, onProgress).then(function (uploaded) {
-                    var media = staged.concat(uploaded);
+                    var media = staged.concat(uploaded).map(normalizeMediaItem).filter(Boolean).slice(0, MAX_MEDIA_FILES);
 
                     // Preset blessing music is a static asset, not an upload.
                     var preset = text(params.blessing_preset_music);
@@ -446,19 +515,26 @@
 
     actions.cv_get_posts = function (b) {
         return currentUser(b).then(function (user) {
-            var q = b.dbMod.query(
+            if (!user) return { items: [] };
+            var publicQuery = b.dbMod.query(
                 b.dbMod.collection(b.db, 'posts'),
+                b.dbMod.where('visibility', '==', 'public'),
                 b.dbMod.orderBy('createdAt', 'desc'),
                 b.dbMod.limit(FEED_PAGE_SIZE)
             );
-            return b.dbMod.getDocs(q).then(function (snap) {
-                var items = [];
-                snap.forEach(function (d) {
-                    var data = d.data();
-                    // Private posts are only for their author.
-                    if (visibilityOf(data.visibility) === 'private' && (!user || data.authorUid !== user.uid)) return;
-                    items.push(shapePost(b, d.id, data, user));
+            var ownQuery = b.dbMod.query(
+                b.dbMod.collection(b.db, 'posts'),
+                b.dbMod.where('authorUid', '==', user.uid),
+                b.dbMod.orderBy('createdAt', 'desc'),
+                b.dbMod.limit(FEED_PAGE_SIZE)
+            );
+            return Promise.all([b.dbMod.getDocs(publicQuery), b.dbMod.getDocs(ownQuery)]).then(function (snapshots) {
+                var byId = {};
+                snapshots.forEach(function (snap) {
+                    snap.forEach(function (d) { byId[d.id] = d.data(); });
                 });
+                var items = Object.keys(byId).map(function (id) { return shapePost(b, id, byId[id], user); });
+                items.sort(function (a, c) { return String(c.created_at || '').localeCompare(String(a.created_at || '')); });
                 return { items: items };
             });
         });
@@ -502,11 +578,8 @@
                 update['reactions.' + user.uid] = removing ? b.dbMod.deleteField() : reaction;
 
                 return b.dbMod.updateDoc(ref, update).then(function () {
-                    // `reaction` is the field the caller reads to repaint the
-                    // button; an empty string means "no reaction".
                     return {
                         id: id,
-                        reaction: removing ? '' : reaction,
                         likes: count,
                         reaction_count: count,
                         user_reaction: removing ? null : reaction,
@@ -531,24 +604,19 @@
                     content: body,
                     createdAt: b.dbMod.serverTimestamp()
                 };
-                var postRef = b.dbMod.doc(b.db, 'posts', id);
-                return b.dbMod.getDoc(postRef).then(function (snap) {
-                    var nextCount = parseInt((snap.exists() ? snap.data().comment_count : 0) || 0, 10) + 1;
-                    return b.dbMod.addDoc(b.dbMod.collection(b.db, 'posts', id, 'comments'), comment).then(function (ref) {
-                        b.dbMod.updateDoc(postRef, {
-                            comment_count: b.dbMod.increment(1)
-                        }).catch(function () {});
-                        return {
+                return b.dbMod.addDoc(b.dbMod.collection(b.db, 'posts', id, 'comments'), comment).then(function (ref) {
+                    b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), {
+                        comment_count: b.dbMod.increment(1)
+                    }).catch(function () {});
+                    return {
+                        id: ref.id,
+                        comment: {
                             id: ref.id,
-                            comment_count: nextCount,
-                            comment: {
-                                id: ref.id,
-                                content: body,
-                                time: 'just now',
-                                author: comment.author
-                            }
-                        };
-                    });
+                            content: body,
+                            time: 'just now',
+                            author: comment.author
+                        }
+                    };
                 });
             });
         });
@@ -558,22 +626,7 @@
         return requireUser(b).then(function (user) {
             var list = files['post_media[]'] || files['media[]'] || files.file || [];
             return uploadAll(b, user, list, onProgress).then(function (items) {
-                // The caller checks `response.data.media_items` and reads
-                // `response.data.media_type`. Returning any other shape makes it
-                // treat a successful upload as a failure and toast the raw
-                // object as "[object Object]".
-                var mode = text(params.post_media_type);
-                if (!mode) {
-                    mode = items.some(function (i) { return i.type === 'video'; }) ? 'reel' : 'gallery';
-                }
-                return {
-                    media_items: items,
-                    media_type: mode,
-                    // Kept for any caller still reading the older names.
-                    staged_media: items,
-                    items: items,
-                    ready: true
-                };
+                return { staged_media: items, items: items, ready: true };
             });
         });
     };
@@ -594,10 +647,7 @@
                 if (uploaded.length) update.photoURL = uploaded[0].url;
 
                 return b.dbMod.updateDoc(ref, update)
-                    .then(function () { return loadProfile(b, user); })
-                    // The caller reads `response.data.user`; keep the profile at
-                    // the top level too for callers that read it directly.
-                    .then(function (profile) { return Object.assign({ user: profile }, profile); });
+                    .then(function () { return loadProfile(b, user); });
             });
         });
     };
@@ -621,18 +671,10 @@
         var id = text(params.post_id || params.id);
         if (!id) throw new Error('That post could not be found.');
         return requireUser(b).then(function () {
-            var ref = b.dbMod.doc(b.db, 'posts', id);
-            return b.dbMod.getDoc(ref).then(function (snap) {
-                if (!snap.exists()) throw new Error('That post is no longer available.');
-                var next = parseInt(snap.data()[field] || 0, 10) + 1;
-                var update = {};
-                update[field] = b.dbMod.increment(1);
-                return b.dbMod.updateDoc(ref, update).then(function () {
-                    // The caller reads back the new count by field name.
-                    var out = { id: id, ok: true };
-                    out[field] = next;
-                    return out;
-                });
+            var update = {};
+            update[field] = b.dbMod.increment(1);
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), update).then(function () {
+                return { id: id, ok: true };
             });
         });
     }
@@ -658,16 +700,16 @@
             author_title: text(author.role),
             contributor_title: text(author.role),
             country: text(data.country),
-            file_url: text(data.file_url),
-            url: text(data.file_url),
-            download_url: text(data.file_url),
-            open_url: text(data.file_url),
+            file_url: httpsUrl(data.file_url),
+            url: httpsUrl(data.file_url),
+            download_url: httpsUrl(data.file_url),
+            open_url: httpsUrl(data.file_url),
             filename: text(data.filename),
             external: false,
             source: 'faithin',
-            cover_image_url: text(data.thumbnail_url),
-            image_url: text(data.thumbnail_url),
-            thumbnail_url: text(data.thumbnail_url),
+            cover_image_url: httpsUrl(data.thumbnail_url),
+            image_url: httpsUrl(data.thumbnail_url),
+            thumbnail_url: httpsUrl(data.thumbnail_url),
             downloads: parseInt(data.download_count || 0, 10),
             download_count: parseInt(data.download_count || 0, 10),
             views: parseInt(data.view_count || 0, 10),
@@ -755,16 +797,8 @@
             var ref = b.dbMod.doc(b.db, 'resources', id);
             return b.dbMod.getDoc(ref).then(function (snap) {
                 if (!snap.exists()) throw new Error('That resource is no longer available.');
-                var data = snap.data();
-                var downloads = parseInt(data.download_count || 0, 10) + 1;
                 b.dbMod.updateDoc(ref, { download_count: b.dbMod.increment(1) }).catch(function () {});
-                return {
-                    id: id,
-                    url: text(data.file_url),
-                    download_url: text(data.file_url),
-                    filename: text(data.filename),
-                    downloads: downloads
-                };
+                return { id: id, url: httpsUrl(snap.data().file_url), download_url: httpsUrl(snap.data().file_url) };
             });
         });
     };
@@ -876,8 +910,8 @@
             location: text(data.location),
             job_type: text(data.job_type || 'Full-time'),
             description: text(data.description),
-            apply_url: text(data.apply_url),
-            contact_email: text(data.contact_email),
+            apply_url: httpsUrl(data.apply_url),
+            contact_email: emailAddress(data.contact_email),
             featured: !!data.featured,
             is_promoted: !!data.featured,
             promoted: !!data.featured,
@@ -895,8 +929,8 @@
             location: text(params.job_location || params.location, 300),
             job_type: text(params.job_type || 'Full-time'),
             description: text(params.job_description || params.description, 8000),
-            apply_url: text(params.job_apply_url || params.apply_url),
-            contact_email: text(params.job_contact_email || params.contact_email),
+            apply_url: httpsUrl(params.job_apply_url || params.apply_url),
+            contact_email: emailAddress(params.job_contact_email || params.contact_email),
             featured: false
         };
     }
@@ -921,6 +955,7 @@
             var doc = jobDoc(b, params, user);
             if (!doc.title) throw new Error('Give the role a title.');
             if (!doc.organization) throw new Error('Add the church or organisation name.');
+            if (!doc.apply_url && !doc.contact_email) throw new Error('Add a secure application link or a valid contact email.');
             doc.createdAt = b.dbMod.serverTimestamp();
             doc.updatedAt = b.dbMod.serverTimestamp();
             return b.dbMod.addDoc(b.dbMod.collection(b.db, 'jobs'), doc).then(function (ref) {
@@ -1004,7 +1039,7 @@
     function listMembers(b, matcher) {
         return currentUser(b).then(function (user) {
             return followingMap(b, user).then(function (following) {
-                var q = b.dbMod.query(b.dbMod.collection(b.db, 'users'), b.dbMod.limit(200));
+                var q = b.dbMod.query(b.dbMod.collection(b.db, 'publicProfiles'), b.dbMod.limit(200));
                 return b.dbMod.getDocs(q).then(function (snap) {
                     var items = [];
                     snap.forEach(function (d) {
@@ -1045,7 +1080,7 @@
         return requireUser(b).then(function (user) {
             var resolve = targetUid
                 ? Promise.resolve(targetUid)
-                : b.dbMod.getDocs(b.dbMod.query(b.dbMod.collection(b.db, 'users'), b.dbMod.limit(200)))
+                : b.dbMod.getDocs(b.dbMod.query(b.dbMod.collection(b.db, 'publicProfiles'), b.dbMod.limit(200)))
                     .then(function (snap) {
                         var found = '';
                         snap.forEach(function (d) {
@@ -1060,8 +1095,7 @@
                 var ref = b.dbMod.doc(b.db, 'follows', followId(user.uid, uid));
                 if (!follow) {
                     return b.dbMod.deleteDoc(ref).then(function () {
-                        // `is_following` is the field the caller reads.
-                        return { is_following: false, following: false, uid: uid, user_id: targetId };
+                        return { following: false, uid: uid, user_id: targetId };
                     });
                 }
                 return b.dbMod.setDoc(ref, {
@@ -1069,7 +1103,7 @@
                     targetUid: uid,
                     createdAt: b.dbMod.serverTimestamp()
                 }).then(function () {
-                    return { is_following: true, following: true, uid: uid, user_id: targetId };
+                    return { following: true, uid: uid, user_id: targetId };
                 });
             });
         });
@@ -1091,7 +1125,7 @@
                 if (!uids.length) return { items: [] };
                 return followingMap(b, user).then(function (following) {
                     return Promise.all(uids.map(function (uid) {
-                        return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', uid))
+                        return b.dbMod.getDoc(b.dbMod.doc(b.db, 'publicProfiles', uid))
                             .then(function (s) { return s.exists() ? shapeMember(uid, s.data(), user, following) : null; })
                             .catch(function () { return null; });
                     })).then(function (items) {

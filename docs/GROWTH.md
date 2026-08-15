@@ -157,11 +157,9 @@ advantage you already have.
 
 Not blocking, but each one improves the product:
 
-1. **Replace the Tailwind CDN.** `cdn.tailwindcss.com` is a development tool. It prints a
-   production warning to the console, adds a render delay, and ships far more CSS than the app
-   uses. Install Tailwind properly and build the stylesheet, scanning
-   `public/assets/js/faith-in-app.js` for class names. Test carefully — the app builds some class
-   strings dynamically, so a safelist will be needed.
+1. **Continue reducing legacy global CSS.** Tailwind is now compiled locally from the application
+   source, but the older application stylesheets are still large and should be split by feature as
+   screens are migrated to React components.
 2. **Split `faith-in-app.js`.** One 8,000-line file is loaded in full for every user on every
    visit. Splitting by tab (feed / bible / jobs / messaging) would meaningfully improve load time,
    especially on mobile data.

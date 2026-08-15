@@ -91,6 +91,30 @@
   list-style: none;
 }
 
+.fi :focus-visible {
+  outline: 3px solid var(--fi-brand);
+  outline-offset: 3px;
+}
+
+.fi-skip-link {
+  background: #fff;
+  border: 2px solid var(--fi-brand);
+  border-radius: 10px;
+  color: var(--fi-ink);
+  font-weight: 700;
+  left: 16px;
+  padding: 10px 14px;
+  position: fixed;
+  top: 12px;
+  transform: translateY(-160%);
+  transition: transform 0.15s ease;
+  z-index: 100;
+}
+
+.fi-skip-link:focus {
+  transform: translateY(0);
+}
+
 .fi-shell {
   margin: 0 auto;
   max-width: var(--fi-max);
@@ -169,9 +193,75 @@
   gap: 12px;
 }
 
+.fi-mobile-menu {
+  display: none;
+  margin-left: auto;
+  position: relative;
+}
+
+.fi-mobile-menu summary {
+  border: 1px solid var(--fi-line);
+  border-radius: 9px;
+  color: var(--fi-ink-soft);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 650;
+  list-style: none;
+  padding: 8px 11px;
+}
+
+.fi-mobile-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.fi-mobile-menu nav {
+  background: #fff;
+  border: 1px solid var(--fi-line);
+  border-radius: 14px;
+  box-shadow: var(--fi-shadow);
+  display: grid;
+  min-width: 210px;
+  padding: 8px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+}
+
+.fi-mobile-menu nav a {
+  border-radius: 8px;
+  color: var(--fi-ink-soft);
+  font-size: 0.94rem;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.fi-mobile-menu nav a:hover {
+  background: var(--fi-bg-tint);
+  color: var(--fi-ink);
+  text-decoration: none;
+}
+
 @media (max-width: 860px) {
   .fi-nav {
     display: none;
+  }
+
+  .fi-mobile-menu {
+    display: block;
+  }
+}
+
+@media (max-width: 560px) {
+  .fi-header__inner {
+    gap: 12px;
+  }
+
+  .fi-header__actions .fi-btn--quiet {
+    display: none;
+  }
+
+  .fi-header__actions .fi-btn--primary {
+    padding-inline: 14px;
   }
 }
 
@@ -332,6 +422,30 @@
   display: flex;
   gap: 6px;
   padding: 12px 16px;
+}
+
+.fi-preview__caption {
+  background: #fff8e8;
+  border-top: 1px solid #f3dfad;
+  color: #765b18;
+  font-size: 0.78rem;
+  font-weight: 650;
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.fi-status-pill {
+  background: #fff3d6;
+  border: 1px solid #f1d18a;
+  border-radius: 999px;
+  color: #76530d;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  padding: 4px 9px;
+  text-transform: uppercase;
 }
 
 .fi-preview__dot {

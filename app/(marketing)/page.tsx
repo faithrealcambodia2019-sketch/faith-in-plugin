@@ -25,8 +25,8 @@ export default function HomePage() {
               The Christian community <span className="fi-hl">you belong to.</span>
             </h1>
             <p className="fi-hero__lede">
-              Read the Khmer Bible beside KJV, NIV and ESV. Share posts, blessings and prayer
-              requests. Publish sermons and studies your church can actually find again. Faith In
+              Prepare bilingual Bible study notes. Share posts, blessings and prayer requests.
+              Publish sermons and studies your church can actually find again. Faith In
               is one platform for the Khmer-speaking church — and everyone who studies alongside
               it.
             </p>
@@ -79,6 +79,7 @@ export default function HomePage() {
                 <span>Sermon notes</span>
               </div>
             </div>
+            <p className="fi-preview__caption">Bible reader preview · licensed full-text integration in development</p>
           </div>
         </div>
       </section>
@@ -110,6 +111,7 @@ export default function HomePage() {
           <div className="fi-grid">
             {features.map((feature) => (
               <article key={feature.slug} className="fi-card">
+                {feature.status ? <span className="fi-status-pill">{feature.status}</span> : null}
                 {feature.khmerTitle ? (
                   <span className="fi-card__km fi-km" lang="km">
                     {feature.khmerTitle}
@@ -175,9 +177,9 @@ export default function HomePage() {
             <article className="fi-card">
               <h3>Side-by-side, not switched</h3>
               <p>
-                You do not have to pick a language and lose the other. Khmer 1954 and your English
-                translation sit next to each other, which is how a bilingual reader actually
-                studies a passage.
+                The Bible Studio is being built around side-by-side reading rather than a language
+                switcher. Full text will launch only when the licensed Khmer and English sources
+                are ready.
               </p>
             </article>
             <article className="fi-card">

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./tailwind.css";
 import "../../public/assets/css/faith-in.css";
 import "../../public/assets/css/community.css";
 import { browserRuntimeConfig } from "@/lib/runtime-config";
@@ -26,9 +27,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-const TAILWIND_CONFIG =
-  "window.tailwind=window.tailwind||{};tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif'],serif:['Merriweather','serif']},colors:{brand:{vault:'#1FA88A',dark:'#15202B',bgStart:'#EAF8F4',bgEnd:'#F5FCF9'}}}}};";
-
 /**
  * Build identifier appended to our own scripts as a cache-busting query.
  *
@@ -46,7 +44,6 @@ const BUILD_ID =
 const ORDERED_SCRIPTS = [
   "https://code.jquery.com/jquery-3.7.1.min.js",
   "https://unpkg.com/lucide@1.30.0/dist/umd/lucide.js",
-  "https://cdn.tailwindcss.com",
   // Must come before the application: it installs the jQuery transport that
   // serves every `cv_*` data action.
   `/assets/js/faith-in-backend.js?v=${BUILD_ID}`,
@@ -54,9 +51,15 @@ const ORDERED_SCRIPTS = [
 ];
 
 function bootstrap(config: unknown) {
-  return `
-${TAILWIND_CONFIG}
-window.cv_ajax=${JSON.stringify(config)};
+  // Prevent a deployment value from terminating the inline script tag. The
+  // values are public Firebase identifiers, but they still cross an HTML
+  // parser boundary and must be serialized for that context.
+  const serializedConfig = JSON.stringify(config)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+
+  return `window.cv_ajax=${serializedConfig};
 (function () {
   var sources = ${JSON.stringify(ORDERED_SCRIPTS)};
   function next(i) {

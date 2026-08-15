@@ -36,6 +36,7 @@ export default function FeaturesPage() {
           <div className="fi-grid">
             {features.map((feature) => (
               <article key={feature.slug} className="fi-card" id={feature.slug}>
+                {feature.status ? <span className="fi-status-pill">{feature.status}</span> : null}
                 {feature.khmerTitle ? (
                   <span className="fi-card__km fi-km" lang="km">
                     {feature.khmerTitle}

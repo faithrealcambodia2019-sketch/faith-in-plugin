@@ -18,6 +18,18 @@ export function SiteHeader() {
           ))}
         </nav>
 
+        <details className="fi-mobile-menu">
+          <summary aria-label="Open navigation">Menu</summary>
+          <nav aria-label="Mobile navigation">
+            {primaryNav.map((link) => (
+              <Link key={link.href} href={link.href}>
+                {link.label}
+              </Link>
+            ))}
+            <Link href={site.appPath}>Log in</Link>
+          </nav>
+        </details>
+
         <div className="fi-header__actions">
           <Link href={site.appPath} className="fi-btn fi-btn--quiet">
             Log in

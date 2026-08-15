@@ -13,7 +13,7 @@ export const site = Object.freeze({
   appPath: "/app",
   tagline: "The Khmer–English Christian community platform",
   description:
-    "Faith In is a bilingual Khmer and English Christian community platform. Read the Khmer Bible beside KJV, NIV and ESV, share posts and blessings, publish ministry resources, request prayer, and find Christian jobs across Cambodia.",
+    "Faith In is a bilingual Khmer and English Christian community platform for sharing posts and blessings, publishing ministry resources, requesting prayer, finding Christian jobs, and preparing bilingual Bible study notes.",
   shortDescription:
     "A bilingual Khmer and English Christian community: Bible study, prayer, ministry resources, and Christian jobs.",
   locales: ["en", "km"],
@@ -63,6 +63,7 @@ export type Feature = {
   summary: string;
   detail: string;
   icon: string;
+  status?: "Live" | "Beta";
 };
 
 export const features: Feature[] = [
@@ -71,10 +72,11 @@ export const features: Feature[] = [
     title: "Bible Studio",
     khmerTitle: "ព្រះគម្ពីរ",
     summary:
-      "Read the Khmer Bible (ព្រះគម្ពីរបរិសុទ្ធ ១៩៥៤) side by side with KJV, NIV and ESV.",
+      "Prepare bilingual sermon notes now; licensed Khmer and English full-text reading is in development.",
     detail:
-      "Open any book and chapter in Khmer and English at the same time, look up words in the built-in dictionary, and keep a reading streak. Built for people who study Scripture in two languages at once — pastors preparing sermons, students checking a translation, and anyone who grew up reading Khmer but studies in English.",
+      "The current beta saves structured sermon notes and typing practice. Side-by-side Khmer and English Bible text, dictionary lookup, and reading tools will be enabled only after a licensed text source is integrated and verified.",
     icon: "book",
+    status: "Beta",
   },
   {
     slug: "community-feed",
@@ -83,7 +85,7 @@ export const features: Feature[] = [
     summary:
       "Share posts, testimonies and encouragement with believers who speak your language.",
     detail:
-      "Post text, images, audio or video to a feed built for a Christian community rather than a general social network. Control who sees each post, follow people whose work encourages you, and message privately when a public comment is not the right place.",
+      "Post text, images, audio or video to a feed built for a Christian community rather than a general social network. Control who sees each post and follow people whose work encourages you.",
     icon: "users",
   },
   {
@@ -149,7 +151,7 @@ export const audiences: Audience[] = [
     title: "For believers",
     body: "A place to grow, not just scroll.",
     points: [
-      "Read Scripture in Khmer and English together",
+      "Prepare bilingual Bible notes while the full-text reader is developed",
       "Share testimonies and blessings with people who understand them",
       "Ask for prayer and know someone is actually praying",
       "Find material for personal study in your own language",
@@ -169,7 +171,7 @@ export const audiences: Audience[] = [
     title: "For pastors and teachers",
     body: "Prepare faster, in the language you preach in.",
     points: [
-      "Compare Khmer 1954 against KJV, NIV and ESV in one view",
+      "Keep structured sermon notes for doctrine, encouragement and application",
       "Build sermon notes with the passage beside you",
       "Design verse graphics with proper Khmer typography",
       "Publish what you make so other churches can use it",
@@ -183,12 +185,12 @@ export const faqs: FaqItem[] = [
   {
     question: "Is Faith In free to use?",
     answer:
-      "Yes. Creating an account, reading the Bible, posting, requesting prayer, browsing the resource library and applying for jobs are all free.",
+      "Yes. Creating an account, using the available Bible study tools, posting, requesting prayer, browsing the resource library and applying for jobs are all free.",
   },
   {
     question: "Which Bible translations are available?",
     answer:
-      "Faith In includes the Khmer Bible (ព្រះគម្ពីរបរិសុទ្ធ ១៩៥៤) alongside the King James Version, New International Version and English Standard Version, shown side by side so you can compare a passage across languages.",
+      "The full-text reader is not live yet. Faith In plans to support licensed Khmer and English translations side by side; the current beta provides structured sermon notes and typing practice.",
   },
   {
     question: "Do I need to read Khmer to use Faith In?",
@@ -213,7 +215,7 @@ export const faqs: FaqItem[] = [
 ];
 
 export const stats = [
-  { value: "4", label: "Bible translations, side by side" },
+  { value: "Beta", label: "Bilingual Bible study workspace" },
   { value: "2", label: "Languages, everywhere it matters" },
   { value: "8", label: "Tools in one platform" },
 ];

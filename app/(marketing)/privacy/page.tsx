@@ -37,7 +37,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Content you create.</strong> Posts, blessings, comments, prayer requests,
-            uploaded resources, job listings and messages.
+            uploaded resources and job listings.
           </li>
           <li>
             <strong>Technical information.</strong> Standard server and analytics data such as
@@ -68,10 +68,10 @@ export default function PrivacyPage() {
 
         <h2>Who can see your content</h2>
         <p>
-          Posts marked public are visible to anyone using {site.name}. Posts with restricted
-          visibility are shown according to the setting you choose. Private messages are visible to
-          the people in the conversation. Resources you publish to the library are intended to be
-          public, and job listings are public by design.
+          Posts marked public are visible to signed-in members. Private posts are visible only to
+          their author. Resources and job listings you publish are intended for the signed-in
+          community. Uploaded files currently use unguessable public storage URLs, so do not upload
+          confidential files.
         </p>
 
         <h2>Your choices</h2>

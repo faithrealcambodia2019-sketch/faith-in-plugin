@@ -7,19 +7,35 @@ The GitHub `main` branch deploys automatically to the Vercel project `faith-in`.
 Before publishing:
 
 1. Run `npm run lint`.
-2. Run `npm run build`.
-3. Review the staged diff for credentials and unrelated files.
-4. Push to GitHub and verify the resulting Vercel deployment.
+2. Run `npm run typecheck`.
+3. Run `npm test` and `npm run test:rules`.
+4. Run `npm run build` and `npm audit --omit=dev`.
+5. Review the staged diff for credentials and unrelated files.
+6. Push to GitHub and verify the resulting Vercel deployment.
+
+Required Vercel variables are listed in `.env.example`. `BLOB_READ_WRITE_TOKEN`
+is server-only and must never be prefixed with `NEXT_PUBLIC_`.
 
 ## Firebase rules
 
 The Firebase project is declared in `.firebaserc`. After authenticating the Firebase CLI, deploy rules with:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-Review changes in the Firebase Console and test with a non-administrator account before enabling App Check enforcement.
+Follow the rollout in `docs/migrations/2026-08-15-public-profiles.md`. Review
+changes in the Firebase Console and test with a non-administrator account
+before enabling App Check enforcement.
+
+## GitHub sign-in
+
+GitHub uses Firebase Authentication, so no GitHub client secret belongs in
+Vercel or browser code. Enable the GitHub provider in Firebase Authentication,
+configure the callback URL Firebase displays in the GitHub OAuth app, ensure
+`faithin.co` is an authorized Firebase domain, then set
+`NEXT_PUBLIC_GITHUB_AUTH_ENABLED=true` in the relevant Vercel environments.
+Leave the flag false until the provider is configured.
 
 ## Firebase data backend (added August 2026)
 
@@ -41,7 +57,7 @@ error.** The previous rules locked every collection except `users`, so the
 `posts` collection could not be written to at all.
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
 Verify afterwards in the Firebase console under Firestore → Rules that the
@@ -77,13 +93,20 @@ rather than an error. Each remaining action is a small addition to the
 npm test
 ```
 
-Runs `tests/backend.test.mjs`, which loads the backend with a fake jQuery and
+`npm test` runs `tests/backend.test.mjs`, which loads the backend with a fake jQuery and
 fake Firebase and exercises the transport end to end — session creation, text
 and media posts, the 25MB limit, feed shaping, reactions, comments, deletion,
 and pass-through of non-application requests.
 
+`npm run test:rules` starts the local Firestore emulator and verifies that
+account documents are private, public profiles exclude email, private posts are
+owner-only, authorship cannot be reassigned, engagement fields cannot be
+arbitrarily overwritten, and unsafe outbound links are rejected. It never
+connects to the production database.
+
 ### Limits
 
 - 25MB per file, 10 files per post — kept in step with `storage.rules`.
-- Uploads go to `faith-in-uploads/{uid}/`, which the storage rules already
-  restrict to the owning member.
+- New uploads go to `faith-in/{uid}/` in Vercel Blob after server-side token and
+  file-signature validation. Existing Firebase Storage files and paths remain
+  unchanged.

@@ -10,15 +10,23 @@
 ## Authorization
 
 - A user can read and update only their own `users/{uid}` document.
+- Other signed-in members can read the email-free `publicProfiles/{uid}` projection used by the member directory.
 - Profile creates and updates use field allowlists; unknown or privileged fields are denied.
 - UID, email, status, and creation metadata cannot be changed by client updates.
-- Uploads are restricted to the authenticated user's path, approved content types, and a 25 MB limit.
-- Files are readable only by authenticated members.
+- New uploads require a valid Firebase ID token, are stored under the verified UID, and are checked by file signature as well as declared type and a 25 MB limit.
+- Vercel Blob uploads currently use public, unguessable URLs. Post visibility protects the Firestore record, not a Blob URL that has already been shared. Moving sensitive media to a private Blob store with an authenticated download proxy is recommended before treating uploads as confidential.
+- Firebase Storage legacy paths remain readable only by authenticated members.
 - All unspecified Firestore and Storage access is denied.
 
 ## Browser protection
 
-Production responses enable HSTS, MIME sniffing protection, clickjacking protection, restrictive referrer handling, and a limited browser Permissions Policy.
+Production responses enable HSTS, a Content Security Policy, MIME sniffing protection, clickjacking protection, restrictive referrer handling, origin isolation, and a limited browser Permissions Policy.
+
+The legacy application still needs inline event handlers, so the current CSP
+permits inline script on `/app`. Tailwind is compiled locally and no longer
+requires a runtime CDN or `unsafe-eval`. Removing the remaining allowance
+requires migrating the browser runtime into bundled React modules; treat that
+as a planned hardening step rather than silently breaking the signed-in app.
 
 ## Firebase App Check
 

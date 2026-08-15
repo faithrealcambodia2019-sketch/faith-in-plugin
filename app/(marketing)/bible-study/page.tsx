@@ -3,9 +3,9 @@ import Link from "next/link";
 import { site } from "@/lib/site-content";
 
 export const metadata: Metadata = {
-  title: "Khmer Bible Study Online — Khmer 1954, KJV, NIV & ESV Side by Side",
+  title: "Khmer–English Bible Study Tools — Bible Studio Beta",
   description:
-    "Read the Khmer Bible (ព្រះគម្ពីរបរិសុទ្ធ ១៩៥៤) side by side with the King James Version, NIV and ESV. Free bilingual Bible study with dictionary lookup, sermon notes and verse graphics.",
+    "Explore the Faith In Bible Studio beta for structured sermon notes and typing practice. Licensed Khmer and English full-text reading is in development.",
   keywords: [
     "Khmer Bible online",
     "ព្រះគម្ពីរខ្មែរ",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: `Khmer Bible Study Online | ${site.name}`,
     description:
-      "Khmer 1954 beside KJV, NIV and ESV — free bilingual Bible study, dictionary lookup and sermon planning.",
+      "Bilingual sermon planning is available in beta; licensed Khmer and English full-text reading is in development.",
     url: "/bible-study",
   },
 };
@@ -26,11 +26,11 @@ export const metadata: Metadata = {
 const tools = [
   {
     title: "Side-by-side reading",
-    body: "Open any book and chapter with Khmer 1954 in one column and KJV, NIV or ESV in the other. Scroll them together and compare a verse without switching apps or losing your place.",
+    body: "Planned: open licensed Khmer and English Bible text side by side and compare a passage without losing your place.",
   },
   {
     title: "Dictionary lookup",
-    body: "Search a word and get its meaning without leaving the passage. Useful when an older Khmer rendering and a modern English one seem to say different things.",
+    body: "Planned: search a word and review its meaning without leaving the passage.",
   },
   {
     title: "Sermon planner",
@@ -56,19 +56,19 @@ export default function BibleStudyPage() {
       <section className="fi-hero" style={{ paddingBottom: 40 }}>
         <div className="fi-shell fi-hero__inner">
           <div>
-            <span className="fi-eyebrow">Bible Studio · Free</span>
+            <span className="fi-eyebrow">Bible Studio · Beta</span>
             <h1>
               Study Scripture in <span className="fi-hl">Khmer and English</span>, together
             </h1>
             <p className="fi-hero__lede">
-              Faith In includes the Khmer Bible (ព្រះគម្ពីរបរិសុទ្ធ ១៩៥៤) alongside the King James
-              Version, New International Version and English Standard Version — displayed side by
-              side, not one at a time. Built for pastors preparing sermons, students checking a
-              translation, and anyone who grew up reading Khmer but studies in English.
+              Faith In is building a side-by-side Khmer and English Bible workspace for pastors,
+              students and bilingual readers. Structured sermon notes and typing practice are in
+              beta now. Full Bible text and dictionary search remain disabled until licensed
+              sources are integrated and verified.
             </p>
             <div className="fi-hero__cta">
               <Link href={site.appPath} className="fi-btn fi-btn--primary fi-btn--lg">
-                Start reading free
+                Open the beta
               </Link>
             </div>
           </div>

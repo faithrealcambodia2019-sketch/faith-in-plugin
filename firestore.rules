@@ -6,56 +6,99 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function ownsProfile(userId) {
+    function owns(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function hasValidIdentity(userId) {
-      return request.resource.data.uid == userId
-        && request.resource.data.uid == request.auth.uid
+    function hasValidAccountIdentity(userId) {
+      return owns(userId)
+        && request.resource.data.uid == userId
         && request.resource.data.email is string
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.emailLower == request.auth.token.email.lower();
+        && request.resource.data.emailLower == request.resource.data.email.lower()
+        && request.resource.data.email == request.auth.token.get('email', '');
     }
 
-    function hasOnlyProfileFields() {
-      return request.resource.data.keys().hasOnly([
-        'uid', 'email', 'emailLower', 'displayName', 'firstName', 'lastName',
-        'photoURL', 'coverURL', 'bio', 'role', 'gender', 'location', 'industry',
-        'church', 'ministry', 'settings', 'verification', 'verificationRequest',
-        'provider', 'providers', 'appUserId', 'siteOrigin',
-        'createdAt', 'updatedAt', 'lastLoginAt', 'status'
-      ]);
+    function validVisibility(value) {
+      return value in ['public', 'private', 'followers'];
     }
 
+    function validHttpsUrl(value) {
+      return value is string
+        && (value == '' || value.matches('^https://[^\\s]+$'));
+    }
+
+    function validEmailOrEmpty(value) {
+      return value is string
+        && (value == '' || value.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'));
+    }
+
+    // Private account documents contain email and settings. They are never a
+    // member directory; public profile fields are copied to /publicProfiles.
     match /users/{userId} {
-      allow create: if ownsProfile(userId)
-        && hasValidIdentity(userId)
-        && hasOnlyProfileFields()
+      function hasOnlyAccountFields() {
+        return request.resource.data.keys().hasOnly([
+          'uid', 'email', 'emailLower', 'displayName', 'firstName', 'lastName',
+          'photoURL', 'coverURL', 'bio', 'role', 'gender', 'location', 'industry',
+          'church', 'ministry', 'settings', 'verification', 'verificationRequest',
+          'provider', 'providers', 'appUserId', 'siteOrigin',
+          'createdAt', 'updatedAt', 'lastLoginAt', 'status'
+        ]);
+      }
+
+      allow create: if hasValidAccountIdentity(userId)
+        && hasOnlyAccountFields()
         && request.resource.data.displayName is string
-        && request.resource.data.status == 'active';
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120
+        && request.resource.data.status == 'active'
+        && !request.resource.data.keys().hasAny(['verification']);
 
-      // Members can see each other's profiles; the feed shows author names and
-      // avatars, and the Network tab needs to list people.
-      allow read: if isSignedIn();
+      allow read: if owns(userId);
 
-      allow update: if ownsProfile(userId)
-        && hasValidIdentity(userId)
-        && hasOnlyProfileFields()
+      allow update: if hasValidAccountIdentity(userId)
+        && hasOnlyAccountFields()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'firstName', 'lastName', 'photoURL', 'coverURL', 'bio',
           'role', 'gender', 'location', 'industry', 'church', 'ministry',
-          'settings', 'verificationRequest',
-          'provider', 'providers', 'appUserId', 'siteOrigin',
-          'updatedAt', 'lastLoginAt'
-        ]);
+          'settings', 'verificationRequest', 'provider', 'providers',
+          'appUserId', 'siteOrigin', 'updatedAt', 'lastLoginAt'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120;
 
       allow delete: if false;
     }
 
-    // ---------------------------------------------------------------------
-    // Community feed
-    // ---------------------------------------------------------------------
+    // Additive privacy migration: this collection exposes only directory data,
+    // never account email or private settings. Existing account documents stay
+    // untouched and each member is backfilled on their next successful login.
+    match /publicProfiles/{userId} {
+      function hasOnlyPublicFields() {
+        return request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'photoURL', 'coverURL', 'bio', 'role', 'gender',
+          'location', 'industry', 'church', 'ministry', 'appUserId',
+          'verification', 'createdAt', 'updatedAt'
+        ]);
+      }
+
+      function verificationMatchesAccount() {
+        return request.resource.data.get('verification', null)
+          == get(/databases/$(database)/documents/users/$(userId)).data.get('verification', null);
+      }
+
+      allow read: if isSignedIn();
+
+      allow create, update: if owns(userId)
+        && hasOnlyPublicFields()
+        && request.resource.data.uid == userId
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 120
+        && verificationMatchesAccount();
+
+      allow delete: if false;
+    }
 
     match /posts/{postId} {
       function isAuthor() {
@@ -64,52 +107,105 @@ service cloud.firestore {
 
       function authorIsCaller() {
         return isSignedIn()
-          && request.resource.data.authorUid is string
           && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.author is map
           && request.resource.data.author.uid == request.auth.uid;
       }
 
-      function withinSizeLimits() {
-        return request.resource.data.content.size() <= 20000
+      function hasValidPostShape() {
+        return request.resource.data.keys().hasOnly([
+          'authorUid', 'author', 'type', 'title', 'excerpt', 'content',
+          'article_title', 'article_excerpt', 'article_body', 'media_items',
+          'cover_image_url', 'visibility', 'blessing_bg_color', 'allow_download',
+          'reactions', 'comment_count', 'share_count', 'repost_count',
+          'createdAt', 'updatedAt'
+        ])
+          && request.resource.data.type is string
+          && request.resource.data.type.size() <= 40
+          && request.resource.data.title is string
           && request.resource.data.title.size() <= 300
-          && request.resource.data.media_items.size() <= 10;
+          && request.resource.data.excerpt is string
+          && request.resource.data.excerpt.size() <= 600
+          && request.resource.data.content is string
+          && request.resource.data.content.size() <= 20000
+          && request.resource.data.article_title is string
+          && request.resource.data.article_title.size() <= 300
+          && request.resource.data.article_excerpt is string
+          && request.resource.data.article_excerpt.size() <= 600
+          && request.resource.data.article_body is string
+          && request.resource.data.article_body.size() <= 100000
+          && request.resource.data.media_items is list
+          && request.resource.data.media_items.size() <= 10
+          && validVisibility(request.resource.data.visibility)
+          && request.resource.data.allow_download is bool
+          && request.resource.data.reactions is map
+          && request.resource.data.comment_count is int
+          && request.resource.data.share_count is int
+          && request.resource.data.repost_count is int;
       }
 
       function startsClean() {
-        // A new post cannot arrive with reactions or counts already set.
         return request.resource.data.reactions.size() == 0
           && request.resource.data.comment_count == 0
           && request.resource.data.share_count == 0
           && request.resource.data.repost_count == 0;
       }
 
-      // Any signed-in member can read the feed. Private posts are filtered in
-      // the client; treat 'private' as a soft setting, not a security boundary.
-      allow read: if isSignedIn();
-
-      allow create: if authorIsCaller() && withinSizeLimits() && startsClean();
-
-      // Two ways to update a post:
-      //   1. The author edits their own post.
-      //   2. Any member reacts, or bumps a counter — but may only touch their
-      //      own key in the reactions map, never anyone else's.
-      //      (An empty diff satisfies hasOnly, so counter-only updates pass.)
-      function isEngagementOnly() {
-        return isSignedIn()
-          && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['reactions', 'comment_count', 'share_count', 'repost_count', 'updatedAt'])
-          && request.resource.data.reactions.diff(resource.data.reactions)
-               .affectedKeys().hasOnly([request.auth.uid]);
+      function authorEditOnly() {
+        return isAuthor()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'type', 'title', 'excerpt', 'content', 'article_title',
+            'article_excerpt', 'article_body', 'media_items', 'cover_image_url',
+            'visibility', 'blessing_bg_color', 'allow_download', 'updatedAt'
+          ])
+          && hasValidPostShape();
       }
 
-      allow update: if (isAuthor() && withinSizeLimits()) || isEngagementOnly();
+      function reactionEditOnly() {
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          && request.resource.data.reactions.diff(resource.data.reactions)
+               .affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.reactions.get(request.auth.uid, null)
+               in [null, 'like', 'celebrate', 'support', 'love', 'insightful', 'funny'];
+      }
 
+      function incrementsOnly(field) {
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+          && request.resource.data.get(field, 0) == resource.data.get(field, 0) + 1;
+      }
+
+      // Legacy documents with no visibility field are readable as public. New
+      // private/follower posts are readable only by their author. The current
+      // UI exposes public/private; follower-only remains fail-closed.
+      allow read: if isSignedIn()
+        && (
+          resource.data.get('visibility', 'public') == 'public'
+          || resource.data.authorUid == request.auth.uid
+        );
+
+      allow create: if authorIsCaller() && hasValidPostShape() && startsClean();
+      allow update: if authorEditOnly()
+        || reactionEditOnly()
+        || incrementsOnly('comment_count')
+        || incrementsOnly('share_count')
+        || incrementsOnly('repost_count');
       allow delete: if isAuthor();
 
       match /comments/{commentId} {
-        allow read: if isSignedIn();
+        function parentIsVisible() {
+          let post = get(/databases/$(database)/documents/posts/$(postId));
+          return post.data.get('visibility', 'public') == 'public'
+            || post.data.authorUid == request.auth.uid;
+        }
+
+        allow read: if isSignedIn() && parentIsVisible();
         allow create: if isSignedIn()
+          && parentIsVisible()
+          && request.resource.data.keys().hasOnly(['authorUid', 'author', 'content', 'createdAt'])
           && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.author.uid == request.auth.uid
           && request.resource.data.content is string
           && request.resource.data.content.size() > 0
           && request.resource.data.content.size() <= 2000;
@@ -118,125 +214,145 @@ service cloud.firestore {
       }
     }
 
-    // ---------------------------------------------------------------------
-    // Member-private subcollections
-    // ---------------------------------------------------------------------
-
-    // Nested paths do not inherit the /users/{userId} rules, so they are
-    // matched explicitly. All of these are private to the member.
     match /users/{userId}/bookmarks/{bookmarkId} {
-      allow read, write: if ownsProfile(userId);
+      allow read, write: if owns(userId);
     }
 
     match /users/{userId}/bible/{docId} {
-      allow read, write: if ownsProfile(userId);
+      allow read, write: if owns(userId);
     }
-
-    // ---------------------------------------------------------------------
-    // Resource library
-    // ---------------------------------------------------------------------
 
     match /resources/{resourceId} {
       function isAuthor() {
         return isSignedIn() && resource.data.authorUid == request.auth.uid;
       }
 
-      allow read: if isSignedIn();
+      function validResourceShape() {
+        return request.resource.data.keys().hasOnly([
+          'authorUid', 'author', 'title', 'description', 'category', 'format',
+          'country', 'file_url', 'filename', 'thumbnail_url', 'allow_download',
+          'download_count', 'view_count', 'createdAt', 'updatedAt'
+        ])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.author.uid == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 2000
+          && validHttpsUrl(request.resource.data.file_url)
+          && request.resource.data.file_url != ''
+          && validHttpsUrl(request.resource.data.thumbnail_url)
+          && request.resource.data.allow_download is bool;
+      }
 
+      function incrementsOnly(field) {
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+          && request.resource.data.get(field, 0) == resource.data.get(field, 0) + 1;
+      }
+
+      allow read: if isSignedIn();
       allow create: if isSignedIn()
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.title is string
-        && request.resource.data.title.size() > 0
-        && request.resource.data.title.size() <= 300
+        && validResourceShape()
         && request.resource.data.download_count == 0
         && request.resource.data.view_count == 0;
-
-      // The author may edit; any member may only bump the read counters.
-      allow update: if isAuthor()
-        || (
-          isSignedIn()
-          && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['download_count', 'view_count'])
-        );
-
+      allow update: if (
+          isAuthor()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title', 'description', 'category', 'format', 'country', 'file_url',
+            'filename', 'thumbnail_url', 'allow_download', 'updatedAt'
+          ])
+          && validResourceShape()
+        ) || incrementsOnly('download_count') || incrementsOnly('view_count');
       allow delete: if isAuthor();
     }
-
-    // ---------------------------------------------------------------------
-    // Prayer requests
-    // ---------------------------------------------------------------------
 
     match /prayers/{prayerId} {
       function isAuthor() {
         return isSignedIn() && resource.data.authorUid == request.auth.uid;
       }
 
-      allow read: if isSignedIn();
+      function prayerShapeIsValid() {
+        return request.resource.data.keys().hasOnly([
+          'authorUid', 'author', 'content', 'urgent', 'prayed', 'createdAt', 'updatedAt'
+        ])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.author.uid == request.auth.uid
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0
+          && request.resource.data.content.size() <= 4000
+          && request.resource.data.urgent is bool
+          && request.resource.data.prayed is map;
+      }
 
-      allow create: if isSignedIn()
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.content is string
-        && request.resource.data.content.size() > 0
-        && request.resource.data.content.size() <= 4000
-        && request.resource.data.prayed.size() == 0;
-
-      // "I prayed for this" may only touch the member's own key.
-      allow update: if isAuthor()
-        || (
-          isSignedIn()
+      function prayedEditOnly() {
+        return isSignedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prayed'])
           && request.resource.data.prayed.diff(resource.data.prayed)
                .affectedKeys().hasOnly([request.auth.uid])
-        );
+          && request.resource.data.prayed.get(request.auth.uid, false) in [true, false];
+      }
 
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && prayerShapeIsValid() && request.resource.data.prayed.size() == 0;
+      allow update: if (
+          isAuthor()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['content', 'urgent', 'updatedAt'])
+          && prayerShapeIsValid()
+        ) || prayedEditOnly();
       allow delete: if isAuthor();
     }
-
-    // ---------------------------------------------------------------------
-    // Ministry jobs
-    // ---------------------------------------------------------------------
 
     match /jobs/{jobId} {
       function isAuthor() {
         return isSignedIn() && resource.data.authorUid == request.auth.uid;
       }
 
+      function validJobShape() {
+        return request.resource.data.keys().hasOnly([
+          'authorUid', 'title', 'organization', 'location', 'job_type',
+          'description', 'apply_url', 'contact_email', 'featured',
+          'createdAt', 'updatedAt'
+        ])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.title is string
+          && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.organization is string
+          && request.resource.data.organization.size() > 0
+          && request.resource.data.organization.size() <= 300
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 8000
+          && validHttpsUrl(request.resource.data.apply_url)
+          && validEmailOrEmpty(request.resource.data.contact_email)
+          && (request.resource.data.apply_url != '' || request.resource.data.contact_email != '')
+          && request.resource.data.featured == false;
+      }
+
       allow read: if isSignedIn();
-
-      allow create: if isSignedIn()
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.title is string
-        && request.resource.data.title.size() > 0
-        && request.resource.data.title.size() <= 300
-        && request.resource.data.description.size() <= 8000
-        // Only an administrator should be able to promote a listing.
-        && request.resource.data.featured == false;
-
+      allow create: if isSignedIn() && validJobShape();
       allow update: if isAuthor()
-        && request.resource.data.featured == resource.data.featured;
-
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'organization', 'location', 'job_type', 'description',
+          'apply_url', 'contact_email', 'updatedAt'
+        ])
+        && validJobShape();
       allow delete: if isAuthor();
     }
 
-    // ---------------------------------------------------------------------
-    // Follows
-    // ---------------------------------------------------------------------
-
     match /follows/{followId} {
       allow read: if isSignedIn();
-
-      // A member may only create follow edges where they are the follower,
-      // so nobody can make someone else appear to follow them.
       allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['followerUid', 'targetUid', 'createdAt'])
         && request.resource.data.followerUid == request.auth.uid
         && request.resource.data.targetUid is string
-        && request.resource.data.targetUid != request.auth.uid;
-
+        && request.resource.data.targetUid != request.auth.uid
+        && followId == request.auth.uid + '__' + request.resource.data.targetUid;
       allow update: if false;
       allow delete: if isSignedIn() && resource.data.followerUid == request.auth.uid;
     }
 
-    // Everything else stays locked until it has rules of its own.
     match /{document=**} {
       allow read, write: if false;
     }

@@ -12,7 +12,7 @@ import { SiteHeader } from "@/components/marketing/SiteHeader";
 export default function MarketingLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div className="fi">
-      <a href="#main" className="fi-btn fi-btn--quiet" style={{ position: "absolute", left: "-9999px" }}>
+      <a href="#main" className="fi-skip-link">
         Skip to content
       </a>
       <SiteHeader />

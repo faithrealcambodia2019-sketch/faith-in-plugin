@@ -8,8 +8,14 @@ service firebase.storage {
 
     function isSafeFaithInFile() {
       return request.resource != null
-        && request.resource.size < 25 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|video/(mp4|quicktime|webm|ogg)|application/pdf|audio/.*|application/zip');
+        && request.resource.size > 0
+        && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType.matches(
+          'image/(jpeg|png|gif|webp|avif|heic|heif)'
+          + '|video/(mp4|quicktime|webm|ogg)'
+          + '|audio/(mpeg|mp4|x-m4a|aac|wav|x-wav|ogg|webm)'
+          + '|application/(pdf|zip)'
+        );
     }
 
     // User-owned media. Community files are visible only to signed-in members.

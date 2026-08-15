@@ -44,6 +44,9 @@ export const browserRuntimeConfig = Object.freeze({
     // instructions to visitors. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in Vercel and
     // add https://faithin.co as an authorised JavaScript origin to enable it.
     google_client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+    // GitHub's client secret stays in Firebase Authentication. This public
+    // switch only controls whether the existing Firebase provider is shown.
+    github_enabled: process.env.NEXT_PUBLIC_GITHUB_AUTH_ENABLED === "true",
     allowed_domain: siteConfig.domain,
     magic_link_enabled: false,
     firebase_config: firebasePublicConfig,

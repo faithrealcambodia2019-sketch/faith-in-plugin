@@ -17,6 +17,9 @@ Never commit service-account credentials, private keys, passwords, or user data.
 - `npm run dev` — local development
 - `npm run build` — production build and type validation
 - `npm run lint` — code quality checks
+- `npm run typecheck` — standalone TypeScript validation
+- `npm test` — Firebase compatibility backend tests
+- `npm run test:rules` — local Firestore authorization tests (never production)
 
 ## Documentation
 

@@ -13769,6 +13769,9 @@ body.dark #cv-root .cv-settings-ref,
 #cv-root .cv-auth-dream .cv-faith-google-btn:hover,
 .curated-vault-premium-wrap .cv-auth-dream .cv-faith-google-btn:hover,
 #cv-social-mvp .cv-auth-dream .cv-faith-google-btn:hover { background: #f3f4f6; }
+#cv-root .cv-auth-dream .cv-faith-github-btn,
+.curated-vault-premium-wrap .cv-auth-dream .cv-faith-github-btn,
+#cv-social-mvp .cv-auth-dream .cv-faith-github-btn { margin-top: 10px; }
 #cv-root .cv-auth-dream .cv-faith-google-btn:disabled,
 .curated-vault-premium-wrap .cv-auth-dream .cv-faith-google-btn:disabled,
 #cv-social-mvp .cv-auth-dream .cv-faith-google-btn:disabled { opacity: .68; cursor: not-allowed; }
