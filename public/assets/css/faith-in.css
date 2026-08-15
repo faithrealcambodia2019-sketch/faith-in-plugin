@@ -33107,3 +33107,10 @@ body.cv-faith-in-platform #cv-root .cv-function-card svg {
         border-radius: 20px;
     }
 }
+
+/* Job dialogs must sit above the fixed desktop and mobile navigation. */
+#cv-root .cv-job-modal-overlay,
+#cv-social-mvp .cv-job-modal-overlay,
+.curated-vault-premium-wrap .cv-job-modal-overlay {
+    z-index: 2147483500 !important;
+}
