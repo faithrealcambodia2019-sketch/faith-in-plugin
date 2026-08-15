@@ -4613,7 +4613,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         </a>
                         ${state.isLoggedIn ? `<label class="cv-global-search cv-react-social-search" aria-label="Search Faith In">
                             <i data-lucide="search"></i>
-                            <input type="search" placeholder="Search FaithIn" onkeydown="if(event.key==='Enter'){event.preventDefault(); setTab('users'); setTimeout(function(){ var input=document.getElementById('cv-find-users-search'); if(input){ input.value=this.value; input.dispatchEvent(new Event('input',{bubbles:true})); } }.bind(this),120); }" />
+                            <input type="search" placeholder="Search Faith In" onkeydown="if(event.key==='Enter'){event.preventDefault(); setTab('users'); setTimeout(function(){ var input=document.getElementById('cv-find-users-search'); if(input){ input.value=this.value; input.dispatchEvent(new Event('input',{bubbles:true})); } }.bind(this),120); }" />
                         </label>` : ''}
                     </div>
 
@@ -5251,7 +5251,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                 <div class="cv-feed-composer-actions">
                     <button type="button" class="cv-feed-compose-action cv-feed-compose-action--live" onclick="cvOpenFeedCreate('blessing')">${cvRenderBlessingIcon("cv-blessing-svg-icon--compose")}<span>Add Blessing</span></button>
                     <button type="button" class="cv-feed-compose-action cv-feed-compose-action--text" onclick="cvOpenFeedCreate('photo')"><i data-lucide="image"></i><span>Photo</span></button>
-                    <button type="button" class="cv-feed-compose-action cv-feed-compose-action--photo" onclick="setTab('prayer')"><i data-lucide="heart"></i><span>Prayer Req</span></button>
+                    <button type="button" class="cv-feed-compose-action cv-feed-compose-action--photo" onclick="setTab('prayer')"><i data-lucide="heart"></i><span>Prayer request</span></button>
                     <button type="button" class="cv-feed-compose-action cv-feed-compose-action--article" onclick="cvOpenFeedCreate('article')"><i data-lucide="file-text"></i><span>Article</span></button>
                 </div>
             </section>

@@ -826,3 +826,686 @@ html body .dark #cv-root .cv-profile-activity-empty > span {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Social experience refresh — a calmer, denser, platform-quality feed.
+   This layer intentionally sits last so the legacy application keeps all of
+   its behaviour while the signed-in experience gets one coherent visual UI.
+   -------------------------------------------------------------------------- */
+
+html body #cv-root {
+  --fi-color-brand: #5b4df4;
+  --fi-color-brand-strong: #4738d1;
+  --fi-color-brand-blue: #5b4df4;
+  --fi-color-accent: #8b5cf6;
+  --fi-color-brand-soft: #f0efff;
+  --fi-color-ink: #182032;
+  --fi-color-muted: #697386;
+  --fi-color-canvas: #f5f6f8;
+  --fi-color-border: #e4e7ec;
+  --fi-gradient-brand: linear-gradient(135deg, #4f46e5 0%, #6856f5 54%, #8b5cf6 100%);
+  --fi-radius-card: 18px;
+  --fi-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 28px rgba(16, 24, 40, 0.055);
+  background: var(--fi-color-canvas);
+  font-size: 15px;
+}
+
+html body #cv-root .cv-react-global-nav {
+  height: 64px !important;
+  min-height: 64px !important;
+  max-height: 64px !important;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.08) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 2px 12px rgba(16, 24, 40, 0.045) !important;
+  backdrop-filter: saturate(180%) blur(16px) !important;
+}
+
+html body #cv-root .cv-react-nav-shell-social {
+  width: 100% !important;
+  max-width: 1480px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  max-height: 64px !important;
+  grid-template-columns: minmax(260px, 1fr) minmax(360px, 560px) minmax(260px, 1fr) !important;
+  gap: 18px !important;
+  padding-inline: 24px !important;
+}
+
+html body #cv-root .cv-react-wordmark {
+  font-size: 25px !important;
+  letter-spacing: -0.055em !important;
+}
+
+html body #cv-root .cv-react-social-search {
+  width: min(100%, 340px) !important;
+  height: 42px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: #f1f3f7 !important;
+  transition: width 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease !important;
+}
+
+html body #cv-root .cv-react-social-search:focus-within {
+  width: min(100%, 390px) !important;
+  border-color: #c7d2fe !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 4px rgba(91, 77, 244, 0.1) !important;
+}
+
+html body #cv-root .cv-react-social-tabs {
+  height: 64px !important;
+  min-height: 64px !important;
+  margin: 0 !important;
+  gap: 6px !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-tile {
+  position: relative !important;
+  width: 112px !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  border-radius: 12px !important;
+  color: #667085 !important;
+  transition: color 160ms ease, background 160ms ease !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-tile:hover {
+  background: #f5f6fa !important;
+  color: #344054 !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-tile.is-active {
+  background: transparent !important;
+  color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-tile.is-active::after {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  left: 12px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--fi-gradient-brand);
+  content: "";
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-icon {
+  width: 22px !important;
+  height: 22px !important;
+  stroke-width: 2.15 !important;
+}
+
+html body #cv-root .cv-react-primary-nav .cv-top-nav-label {
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+html body #cv-root .cv-react-social-actions {
+  gap: 8px !important;
+}
+
+html body #cv-root .cv-react-round-action,
+html body #cv-root .cv-react-round-action-slot .cv-feed-messenger-button,
+html body #cv-root .cv-react-round-action-slot .cv-feed-notifications-button,
+html body #cv-root .cv-react-profile-avatar-button {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  border: 1px solid #e7e9ee !important;
+  background: #f5f6f8 !important;
+  color: #344054 !important;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease !important;
+}
+
+html body #cv-root .cv-react-round-action:hover,
+html body #cv-root .cv-react-round-action-slot :is(.cv-feed-messenger-button, .cv-feed-notifications-button):hover,
+html body #cv-root .cv-react-profile-avatar-button:hover {
+  border-color: #d7d9e0 !important;
+  background: #eceef3 !important;
+  transform: translateY(-1px) !important;
+}
+
+html body #cv-root .cv-react-feed-page,
+html body #cv-root .cv-feed-page-linkedin {
+  max-width: none !important;
+  min-height: calc(100vh - 64px) !important;
+  padding: 22px 24px 104px !important;
+  background:
+    radial-gradient(circle at 50% -180px, rgba(91, 77, 244, 0.075), transparent 420px),
+    var(--fi-color-canvas) !important;
+}
+
+html body #cv-root .cv-feed-layout--three-col {
+  width: min(100%, 1320px) !important;
+  margin: 0 auto !important;
+  grid-template-columns: 260px minmax(520px, 680px) 300px !important;
+  gap: 24px !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar,
+html body #cv-root .cv-feed-right-sidebar {
+  top: 86px !important;
+  max-height: calc(100vh - 102px) !important;
+}
+
+html body #cv-root .cv-feed-main-column {
+  max-width: 680px !important;
+}
+
+html body #cv-root :where(.cv-feed-left-card, .cv-feed-side-card, .cv-feed-composer-card, .cv-feed-card) {
+  border: 1px solid var(--fi-color-border) !important;
+  border-radius: var(--fi-radius-card) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: var(--fi-shadow-card) !important;
+}
+
+html body #cv-root .cv-react-profile-card {
+  border-radius: 20px !important;
+}
+
+html body #cv-root .cv-feed-profile-cover {
+  height: 76px !important;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.72), transparent 26%),
+    linear-gradient(135deg, #dbeafe 0%, #e5e7ff 48%, #f3e8ff 100%) !important;
+}
+
+html body #cv-root .cv-feed-profile-avatar {
+  width: 70px !important;
+  height: 70px !important;
+  margin-top: -35px !important;
+  border-width: 4px !important;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.13) !important;
+}
+
+html body #cv-root .cv-feed-profile-name {
+  color: #182032 !important;
+  font-size: 16px !important;
+  letter-spacing: -0.015em !important;
+}
+
+html body #cv-root .cv-feed-profile-role {
+  max-width: 22ch !important;
+  margin: 4px auto 0 !important;
+  color: #697386 !important;
+  line-height: 1.45 !important;
+}
+
+html body #cv-root .cv-react-saved-items {
+  min-height: 46px !important;
+  border-top-color: #edf0f4 !important;
+  color: #475467 !important;
+}
+
+html body #cv-root .cv-feed-shortcuts-card {
+  display: grid !important;
+  gap: 5px !important;
+  padding: 8px 0 !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar .cv-feed-shortcut {
+  min-height: 48px !important;
+  gap: 12px !important;
+  border-radius: 13px !important;
+  padding: 5px 8px !important;
+  color: #475467 !important;
+  font-size: 14px !important;
+  font-weight: 720 !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar .cv-feed-shortcut svg {
+  width: 34px !important;
+  height: 34px !important;
+  flex: 0 0 34px !important;
+  border-radius: 11px !important;
+  background: #eef0f5 !important;
+  color: #596579 !important;
+  padding: 8px !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar .cv-feed-shortcut:hover {
+  border-color: transparent !important;
+  background: #eceef3 !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar .cv-feed-shortcut.is-active {
+  border-color: #dedcff !important;
+  background: #efeeff !important;
+  color: #4438ca !important;
+}
+
+html body #cv-root .cv-feed-left-sidebar .cv-feed-shortcut.is-active svg {
+  background: var(--fi-gradient-brand) !important;
+  color: #fff !important;
+}
+
+html body #cv-root .cv-react-stories {
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+  padding: 2px 2px 8px !important;
+  scroll-snap-type: x proximity !important;
+}
+
+html body #cv-root .cv-react-story-card {
+  width: 116px !important;
+  height: 198px !important;
+  flex-basis: 116px !important;
+  border-color: rgba(16, 24, 40, 0.1) !important;
+  border-radius: 17px !important;
+  box-shadow: 0 5px 18px rgba(16, 24, 40, 0.11) !important;
+  scroll-snap-align: start !important;
+  transition: transform 180ms ease, box-shadow 180ms ease !important;
+}
+
+html body #cv-root .cv-react-story-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 10px 26px rgba(16, 24, 40, 0.16) !important;
+}
+
+html body #cv-root .cv-react-story-create-media {
+  height: 148px !important;
+}
+
+html body #cv-root .cv-react-story-avatar {
+  width: 40px !important;
+  height: 40px !important;
+  border-width: 3px !important;
+  border-color: #6d5df6 !important;
+}
+
+html body #cv-root .cv-react-fb-composer {
+  margin-bottom: 14px !important;
+  padding: 16px !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-composer-avatar {
+  width: 46px !important;
+  height: 46px !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-trigger {
+  min-height: 46px !important;
+  border: 1px solid #e5e7eb !important;
+  background: #f5f6f8 !important;
+  color: #667085 !important;
+  font-weight: 560 !important;
+  text-align: left !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-trigger:hover {
+  border-color: #d8dbe2 !important;
+  background: #eff1f4 !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action {
+  min-height: 42px !important;
+  border-radius: 11px !important;
+  color: #526071 !important;
+  transition: background 150ms ease, color 150ms ease !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action:hover {
+  background: #f2f3f6 !important;
+  color: #344054 !important;
+}
+
+html body #cv-root .cv-react-post-card {
+  margin-bottom: 14px !important;
+  border-radius: var(--fi-radius-card) !important;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
+}
+
+html body #cv-root .cv-react-post-card:hover {
+  border-color: #d9dde5 !important;
+  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.04), 0 14px 34px rgba(16, 24, 40, 0.075) !important;
+  transform: translateY(-1px) !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-feed-card-head {
+  padding: 18px 18px 9px !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-feed-body {
+  padding: 2px 18px 14px !important;
+  color: #273244 !important;
+  font-size: 15px !important;
+  line-height: 1.62 !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-post-social-stats {
+  padding: 10px 18px !important;
+  color: #697386 !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-linkedin-actions {
+  padding: 5px 10px !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-linkedin-action,
+html body #cv-root .cv-react-post-card .cv-reaction-trigger {
+  min-height: 42px !important;
+  border-radius: 10px !important;
+  color: #596579 !important;
+  font-weight: 720 !important;
+}
+
+html body #cv-root .cv-react-post-card .cv-linkedin-action:hover,
+html body #cv-root .cv-react-post-card .cv-reaction-trigger:hover {
+  background: #f1f3f6 !important;
+  color: #344054 !important;
+}
+
+html body #cv-root .cv-linkedin-comment-row {
+  padding: 13px 18px 16px !important;
+  background: #fcfcfd !important;
+}
+
+html body #cv-root .cv-comment-input-wrap {
+  border: 1px solid #e4e7ec !important;
+  border-radius: 999px !important;
+  background: #f5f6f8 !important;
+}
+
+html body #cv-root .cv-comment-input-wrap:focus-within {
+  border-color: #c7d2fe !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 4px rgba(91, 77, 244, 0.08) !important;
+}
+
+html body #cv-root .cv-ui-right-rail {
+  gap: 16px !important;
+}
+
+html body #cv-root .cv-ui-rail-card {
+  padding: 18px !important;
+  border-radius: 18px !important;
+}
+
+html body #cv-root .cv-ui-rail-heading h3 {
+  color: #344054 !important;
+  font-size: 14px !important;
+  letter-spacing: -0.01em !important;
+}
+
+html body #cv-root .cv-ui-verse-card {
+  border-color: #ddd9ff !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(139, 92, 246, 0.13), transparent 42%),
+    linear-gradient(145deg, #fff 0%, #faf9ff 100%) !important;
+}
+
+html body #cv-root .cv-ui-verse-box {
+  border-left-color: var(--fi-color-brand) !important;
+}
+
+html body #cv-root .cv-ui-verse-kh {
+  color: #28314b !important;
+  font-family: var(--font-koh-santepheap), sans-serif !important;
+  line-height: 1.85 !important;
+}
+
+html body #cv-root .cv-ui-contact-row {
+  min-height: 60px !important;
+  border-radius: 12px !important;
+  padding: 8px !important;
+}
+
+html body #cv-root .cv-ui-contact-row:hover {
+  background: #f2f3f6 !important;
+}
+
+html body #cv-root .cv-ui-contact-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  flex-basis: 42px !important;
+}
+
+html body #cv-root .cv-ui-rail-footer {
+  color: #98a2b3 !important;
+  font-size: 11px !important;
+}
+
+@media (min-width: 901px) {
+  html body .curated-vault-premium-wrap.cv-body-mounted-app,
+  html body.cv-faith-in-platform > .curated-vault-premium-wrap {
+    padding-top: 64px !important;
+  }
+}
+
+html body .dark #cv-root {
+  --fi-color-ink: #f2f4f7;
+  --fi-color-muted: #aab3c2;
+  --fi-color-canvas: #10131a;
+  --fi-color-border: #2b3140;
+  --fi-color-surface: #191e29;
+  --fi-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 12px 32px rgba(0, 0, 0, 0.2);
+  background: var(--fi-color-canvas) !important;
+}
+
+html body .dark #cv-root .cv-react-global-nav {
+  border-bottom-color: #2b3140 !important;
+  background: rgba(25, 30, 41, 0.96) !important;
+}
+
+html body .dark #cv-root .cv-react-social-search,
+html body .dark #cv-root :is(.cv-react-round-action, .cv-react-profile-avatar-button),
+html body .dark #cv-root .cv-react-round-action-slot :is(.cv-feed-messenger-button, .cv-feed-notifications-button) {
+  border-color: #333a49 !important;
+  background: #242a36 !important;
+  color: #e4e7ec !important;
+}
+
+html body .dark #cv-root .cv-react-social-search:focus-within {
+  border-color: #6d63dc !important;
+  background: #1d2230 !important;
+}
+
+html body .dark #cv-root .cv-react-primary-nav .cv-top-nav-tile {
+  color: #aab3c2 !important;
+}
+
+html body .dark #cv-root .cv-react-primary-nav .cv-top-nav-tile:hover {
+  background: #242a36 !important;
+  color: #f2f4f7 !important;
+}
+
+html body .dark #cv-root .cv-react-feed-page,
+html body .dark #cv-root .cv-feed-page-linkedin {
+  background:
+    radial-gradient(circle at 50% -180px, rgba(109, 94, 252, 0.12), transparent 420px),
+    #10131a !important;
+}
+
+html body .dark #cv-root :where(.cv-feed-left-card, .cv-feed-side-card, .cv-feed-composer-card, .cv-feed-card) {
+  border-color: #2b3140 !important;
+  background: #191e29 !important;
+}
+
+html body .dark #cv-root .cv-feed-profile-name,
+html body .dark #cv-root .cv-ui-rail-heading h3,
+html body .dark #cv-root .cv-ui-verse-kh,
+html body .dark #cv-root .cv-react-post-card .cv-feed-body {
+  color: #f2f4f7 !important;
+}
+
+html body .dark #cv-root .cv-feed-left-sidebar .cv-feed-shortcut {
+  color: #c9d0dc !important;
+}
+
+html body .dark #cv-root .cv-feed-left-sidebar .cv-feed-shortcut svg,
+html body .dark #cv-root .cv-feed-left-sidebar .cv-feed-shortcut:hover,
+html body .dark #cv-root .cv-react-fb-composer .cv-feed-compose-trigger,
+html body .dark #cv-root .cv-comment-input-wrap,
+html body .dark #cv-root .cv-mobile-bottom-item:hover {
+  border-color: #333a49 !important;
+  background: #242a36 !important;
+  color: #c9d0dc !important;
+}
+
+html body .dark #cv-root .cv-feed-left-sidebar .cv-feed-shortcut.is-active {
+  border-color: #4e4784 !important;
+  background: #292545 !important;
+  color: #c7c2ff !important;
+}
+
+html body .dark #cv-root .cv-react-fb-composer .cv-feed-composer-head,
+html body .dark #cv-root .cv-react-post-card :is(.cv-post-social-stats, .cv-linkedin-actions) {
+  border-color: #2b3140 !important;
+}
+
+html body .dark #cv-root .cv-react-fb-composer .cv-feed-compose-action:hover,
+html body .dark #cv-root .cv-react-post-card :is(.cv-linkedin-action, .cv-reaction-trigger):hover,
+html body .dark #cv-root .cv-ui-contact-row:hover {
+  background: #242a36 !important;
+  color: #f2f4f7 !important;
+}
+
+html body .dark #cv-root .cv-linkedin-comment-row {
+  background: #161b24 !important;
+}
+
+html body .dark #cv-root .cv-ui-verse-card {
+  border-color: #453e72 !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(139, 92, 246, 0.14), transparent 42%),
+    #191e29 !important;
+}
+
+@media (max-width: 1280px) {
+  html body #cv-root .cv-react-nav-shell-social {
+    grid-template-columns: minmax(210px, 1fr) minmax(330px, 480px) minmax(210px, 1fr) !important;
+    padding-inline: 18px !important;
+  }
+
+  html body #cv-root .cv-react-primary-nav .cv-top-nav-tile {
+    width: 92px !important;
+  }
+
+  html body #cv-root .cv-feed-layout--three-col {
+    grid-template-columns: 244px minmax(500px, 680px) !important;
+    max-width: 980px !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  html body #cv-root .cv-react-global-nav {
+    height: 62px !important;
+    min-height: 62px !important;
+    max-height: none !important;
+  }
+
+  html body #cv-root .cv-react-nav-shell-social {
+    height: 62px !important;
+    min-height: 62px !important;
+    max-height: 62px !important;
+    padding-inline: 16px !important;
+  }
+
+  html body #cv-root .cv-react-feed-page,
+  html body #cv-root .cv-feed-page-linkedin {
+    padding-top: 18px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  html body #cv-root .cv-react-global-nav {
+    background: rgba(255, 255, 255, 0.98) !important;
+  }
+
+  html body #cv-root .cv-nav-mobile-row {
+    min-height: 60px !important;
+    padding-inline: 14px !important;
+  }
+
+  html body #cv-root .cv-react-feed-page,
+  html body #cv-root .cv-feed-page-linkedin {
+    padding: 12px 0 86px !important;
+    background: #f3f4f6 !important;
+  }
+
+  html body #cv-root .cv-react-stories {
+    gap: 9px !important;
+    margin-bottom: 8px !important;
+    padding: 0 12px 9px !important;
+  }
+
+  html body #cv-root .cv-react-story-card {
+    width: 106px !important;
+    height: 176px !important;
+    flex-basis: 106px !important;
+    border-radius: 16px !important;
+  }
+
+  html body #cv-root .cv-react-story-create-media {
+    height: 128px !important;
+  }
+
+  html body #cv-root .cv-feed-composer-card,
+  html body #cv-root .cv-feed-card {
+    width: calc(100% - 20px) !important;
+    margin-right: 10px !important;
+    margin-left: 10px !important;
+    border-right: 1px solid var(--fi-color-border) !important;
+    border-left: 1px solid var(--fi-color-border) !important;
+    border-radius: 16px !important;
+  }
+
+  html body #cv-root .cv-react-fb-composer {
+    padding: 13px !important;
+  }
+
+  html body #cv-root .cv-react-fb-composer .cv-feed-compose-action {
+    min-height: 40px !important;
+    padding-inline: 5px !important;
+    font-size: 11px !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-feed-card-head {
+    padding: 15px 15px 8px !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-feed-body {
+    padding-inline: 15px !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-linkedin-action,
+  html body #cv-root .cv-react-post-card .cv-reaction-trigger {
+    gap: 6px !important;
+    font-size: 13px !important;
+  }
+
+  html body #cv-root .cv-mobile-bottom-nav {
+    height: 66px !important;
+    border-top-color: #e4e7ec !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.06) !important;
+    backdrop-filter: blur(14px) !important;
+  }
+
+  html body .dark #cv-root .cv-mobile-bottom-nav {
+    border-top-color: #2b3140 !important;
+    background: rgba(25, 30, 41, 0.96) !important;
+  }
+
+  html body #cv-root .cv-mobile-bottom-item {
+    height: 52px !important;
+    border-radius: 12px !important;
+  }
+
+  html body #cv-root .cv-mobile-bottom-item.is-active {
+    background: #efeeff !important;
+    color: var(--fi-color-brand) !important;
+  }
+}
+
+@media (max-width: 390px) {
+  html body #cv-root .cv-react-fb-composer .cv-feed-compose-action span {
+    font-size: 10px !important;
+  }
+
+  html body #cv-root .cv-react-post-card .cv-action-label {
+    font-size: 12px !important;
+  }
+}
