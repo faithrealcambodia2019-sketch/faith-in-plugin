@@ -29,15 +29,28 @@ export const metadata: Metadata = {
 const TAILWIND_CONFIG =
   "window.tailwind=window.tailwind||{};tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif'],serif:['Merriweather','serif']},colors:{brand:{vault:'#1FA88A',dark:'#15202B',bgStart:'#EAF8F4',bgEnd:'#F5FCF9'}}}}};";
 
+/**
+ * Build identifier appended to our own scripts as a cache-busting query.
+ *
+ * Without it, a browser that cached an earlier faith-in-backend.js keeps
+ * running it after a deploy — which is how members kept seeing an upload error
+ * that had already been fixed and shipped. The commit SHA changes on every
+ * deploy, so the URL changes with it and the browser must refetch.
+ */
+const BUILD_ID =
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  "dev";
+
 /** Loaded strictly in this order. */
 const ORDERED_SCRIPTS = [
   "https://code.jquery.com/jquery-3.7.1.min.js",
   "https://unpkg.com/lucide@1.30.0/dist/umd/lucide.js",
   "https://cdn.tailwindcss.com",
   // Must come before the application: it installs the jQuery transport that
-  // serves every `cv_*` data action from Firebase.
-  "/assets/js/faith-in-backend.js",
-  "/assets/js/faith-in-app.js",
+  // serves every `cv_*` data action.
+  `/assets/js/faith-in-backend.js?v=${BUILD_ID}`,
+  `/assets/js/faith-in-app.js?v=${BUILD_ID}`,
 ];
 
 function bootstrap(config: unknown) {
