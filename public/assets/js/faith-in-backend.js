@@ -15,13 +15,19 @@
  * -------------------
  * Rather than rewriting the 8,000-line application, this module installs a
  * jQuery ajax transport that intercepts requests to `cv_ajax.ajax_url`, reads
- * the `action`, and fulfils it directly against Firebase Auth, Cloud Firestore
- * and Cloud Storage from the browser. It returns exactly the
- * `{ success, data }` envelope the application already expects, so no calling
- * code had to change.
+ * the `action`, and fulfils it against Firebase Auth and Cloud Firestore from
+ * the browser. It returns exactly the `{ success, data }` envelope the
+ * application already expects, so no calling code had to change.
  *
- * Authorisation is enforced by the Firestore and Storage security rules, not
- * here — this file cannot grant itself access it does not have.
+ * File uploads are the exception: they POST to /api/upload, which stores them
+ * in Vercel Blob. Firebase Cloud Storage was dropped because publishing its
+ * rules requires the Firebase CLI or Console, and uploads failed with
+ * `storage/unauthorized` until they were.
+ *
+ * Authorisation for Firestore is enforced by the security rules, not here —
+ * this file cannot grant itself access it does not have. Uploads are
+ * authorised server-side in the route, which verifies the member's Firebase
+ * ID token and namespaces files under their uid.
  *
  * Load order: after jQuery, before faith-in-app.js.
  */
@@ -30,7 +36,7 @@
     'use strict';
 
     var SDK = '10.14.1';
-    var MAX_MEDIA_BYTES = 25 * 1024 * 1024; // Must stay in step with storage.rules.
+    var MAX_MEDIA_BYTES = 25 * 1024 * 1024; // Must stay in step with app/api/upload/route.ts.
     var MAX_MEDIA_FILES = 10;
     var FEED_PAGE_SIZE = 50;
 
@@ -55,10 +61,11 @@
         bundlePromise = Promise.all([
             import('https://www.gstatic.com/firebasejs/' + SDK + '/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/' + SDK + '/firebase-auth.js'),
-            import('https://www.gstatic.com/firebasejs/' + SDK + '/firebase-firestore.js'),
-            import('https://www.gstatic.com/firebasejs/' + SDK + '/firebase-storage.js')
+            import('https://www.gstatic.com/firebasejs/' + SDK + '/firebase-firestore.js')
+            // firebase-storage is intentionally not loaded: uploads go through
+            // /api/upload to Vercel Blob.
         ]).then(function (mods) {
-            var appMod = mods[0], authMod = mods[1], dbMod = mods[2], storageMod = mods[3];
+            var appMod = mods[0], authMod = mods[1], dbMod = mods[2];
             // Reuse the app the auth code already created so there is a single
             // auth state, rather than initialising a second Firebase app.
             var name = 'faith-in-auth';
@@ -68,10 +75,8 @@
                 app: app,
                 auth: authMod.getAuth(app),
                 db: dbMod.getFirestore(app),
-                storage: storageMod.getStorage(app),
                 authMod: authMod,
-                dbMod: dbMod,
-                storageMod: storageMod
+                dbMod: dbMod
             };
         });
 
@@ -217,73 +222,67 @@
     // Media upload
     // ---------------------------------------------------------------------
 
-    function mediaKind(file) {
-        var mime = String(file.type || '').toLowerCase();
-        if (mime.indexOf('video/') === 0) return 'video';
-        if (mime.indexOf('audio/') === 0) return 'audio';
-        if (mime.indexOf('image/') === 0) return 'image';
-        return 'file';
-    }
-
-    function uploadOne(b, user, file, onProgress) {
-        if (file.size > MAX_MEDIA_BYTES) {
-            return Promise.reject(new Error(
-                '"' + (file.name || 'file') + '" is ' + Math.ceil(file.size / 1048576) +
-                'MB. The limit is 25MB — please choose a smaller file.'
-            ));
-        }
-        var safe = String(file.name || 'upload').replace(/[^\w.\-]+/g, '_').slice(-80);
-        var path = 'faith-in-uploads/' + user.uid + '/' + Date.now() + '-' +
-            Math.random().toString(36).slice(2, 8) + '-' + safe;
-        var ref = b.storageMod.ref(b.storage, path);
-        var task = b.storageMod.uploadBytesResumable(ref, file, { contentType: file.type || 'application/octet-stream' });
-
-        return new Promise(function (resolve, reject) {
-            task.on('state_changed',
-                function (snap) {
-                    if (onProgress && snap.totalBytes) onProgress(snap.bytesTransferred / snap.totalBytes);
-                },
-                function (err) {
-                    reject(new Error(
-                        err && err.code === 'storage/unauthorized'
-                            ? 'You do not have permission to upload files. Please log in again.'
-                            : 'Upload failed. Please check your connection and try again.'
-                    ));
-                },
-                function () {
-                    b.storageMod.getDownloadURL(task.snapshot.ref).then(function (url) {
-                        resolve({
-                            url: url,
-                            local_url: url,
-                            preview_url: url,
-                            drive_url: '',
-                            type: mediaKind(file),
-                            mime: file.type || '',
-                            name: file.name || '',
-                            size: file.size,
-                            path: path
-                        });
-                    }).catch(reject);
-                }
-            );
-        });
-    }
-
+    /**
+     * Uploads through /api/upload, which stores files in Vercel Blob.
+     *
+     * Previously this wrote straight to Firebase Cloud Storage, which failed
+     * with `storage/unauthorized` because publishing Storage rules needs the
+     * Firebase CLI or Console. Vercel Blob needs neither. The route verifies
+     * the member's Firebase ID token server-side and namespaces every file
+     * under their uid.
+     */
     function uploadAll(b, user, files, onProgress) {
         var list = Array.prototype.slice.call(files || []).slice(0, MAX_MEDIA_FILES);
         if (!list.length) return Promise.resolve([]);
-        var done = 0;
-        return list.reduce(function (chain, file) {
-            return chain.then(function (acc) {
-                return uploadOne(b, user, file, function (fraction) {
-                    if (onProgress) onProgress((done + fraction) / list.length);
-                }).then(function (item) {
-                    done += 1;
-                    if (onProgress) onProgress(done / list.length);
-                    return acc.concat([item]);
-                });
+
+        var oversize = list.find(function (f) { return f.size > MAX_MEDIA_BYTES; });
+        if (oversize) {
+            return Promise.reject(new Error(
+                '"' + (oversize.name || 'file') + '" is ' + Math.ceil(oversize.size / 1048576) +
+                'MB. The limit is 25MB — please choose a smaller file.'
+            ));
+        }
+
+        return user.getIdToken().then(function (token) {
+            var form = new FormData();
+            list.forEach(function (file) { form.append('files', file); });
+
+            return new Promise(function (resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/upload', true);
+                xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+
+                if (xhr.upload && onProgress) {
+                    xhr.upload.onprogress = function (event) {
+                        if (event.lengthComputable && event.total) {
+                            onProgress(event.loaded / event.total);
+                        }
+                    };
+                }
+
+                xhr.onload = function () {
+                    var body = null;
+                    try { body = JSON.parse(xhr.responseText); } catch (e) { body = null; }
+                    if (xhr.status >= 200 && xhr.status < 300 && body && body.success) {
+                        if (onProgress) onProgress(1);
+                        resolve((body.data && body.data.items) || []);
+                        return;
+                    }
+                    // Only surface `data` when it is actually a message. On a
+                    // non-2xx response it can still be the success-shaped
+                    // object, which would render as "[object Object]".
+                    var message = (body && typeof body.data === 'string' && body.data)
+                        ? body.data
+                        : 'Upload failed. Please check your connection and try again.';
+                    reject(new Error(message));
+                };
+                xhr.onerror = function () {
+                    reject(new Error('Upload failed. Please check your connection and try again.'));
+                };
+
+                xhr.send(form);
             });
-        }, Promise.resolve([]));
+        });
     }
 
     // ---------------------------------------------------------------------
