@@ -55,12 +55,17 @@ async function getSigningCertificates(): Promise<Record<string, string>> {
 export async function verifyFirebaseToken(idToken: string): Promise<VerifiedUser> {
   if (!idToken) throw new Error("Missing authentication token.");
 
-  const header = decodeProtectedHeader(idToken);
-  if (header.alg !== "RS256") {
-    throw new Error("Unexpected token signing algorithm.");
+  // decodeProtectedHeader throws library-specific text on a malformed token
+  // ("Invalid Token or Protected Header formatting"), which should not reach
+  // a member. Normalise every failure here to the same neutral message.
+  let header;
+  try {
+    header = decodeProtectedHeader(idToken);
+  } catch {
+    throw new Error("Your session is not valid. Please log in again.");
   }
-  if (!header.kid) {
-    throw new Error("Token is missing a key id.");
+  if (header.alg !== "RS256" || !header.kid) {
+    throw new Error("Your session is not valid. Please log in again.");
   }
 
   const certificates = await getSigningCertificates();
@@ -69,7 +74,7 @@ export async function verifyFirebaseToken(idToken: string): Promise<VerifiedUser
     // The key may have rotated since we cached; refetch once before failing.
     certCache = null;
     const fresh = await getSigningCertificates();
-    if (!fresh[header.kid]) throw new Error("Token was signed with an unknown key.");
+    if (!fresh[header.kid]) throw new Error("Your session is not valid. Please log in again.");
     return verifyWithPem(idToken, fresh[header.kid]);
   }
 
