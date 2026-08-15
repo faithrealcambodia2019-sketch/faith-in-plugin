@@ -1,0 +1,430 @@
+/*
+ * Final production UI layer.
+ *
+ * The application still contains a large legacy stylesheet. Keeping the
+ * system-level refinements here makes the intended tokens and responsive
+ * behavior easy to find without rewriting working feature styles.
+ */
+
+#cv-root {
+  --fi-color-brand: #4f46e5;
+  --fi-color-brand-strong: #4338ca;
+  --fi-color-ink: #172033;
+  --fi-color-muted: #64748b;
+  --fi-color-surface: #ffffff;
+  --fi-color-canvas: #f4f6fa;
+  --fi-color-border: #e2e8f0;
+  --fi-radius-control: 12px;
+  --fi-radius-card: 16px;
+  --fi-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 32px rgba(15, 23, 42, 0.04);
+  color: var(--fi-color-ink);
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+.dark #cv-root {
+  --fi-color-ink: #f8fafc;
+  --fi-color-muted: #cbd5e1;
+  --fi-color-surface: #172033;
+  --fi-color-canvas: #0f172a;
+  --fi-color-border: #334155;
+  --fi-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.16), 0 16px 36px rgba(0, 0, 0, 0.14);
+}
+
+#cv-root button,
+#cv-root a,
+#cv-root input,
+#cv-root textarea,
+#cv-root select,
+#cv-root summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+#cv-root :where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.32) !important;
+  outline-offset: 3px !important;
+}
+
+#cv-root .cv-feed-page-linkedin,
+#cv-root .cv-react-feed-page {
+  background: var(--fi-color-canvas) !important;
+}
+
+#cv-root :where(.cv-feed-left-card, .cv-feed-side-card, .cv-feed-composer-card, .cv-feed-card) {
+  border-color: var(--fi-color-border) !important;
+  border-radius: var(--fi-radius-card) !important;
+  box-shadow: var(--fi-shadow-card) !important;
+}
+
+/* Session restoration replaces the misleading login flash for returning users. */
+#cv-root .cv-session-loading {
+  min-height: calc(100vh - 58px);
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background: linear-gradient(145deg, #f7f7ff 0%, #fff 55%, #f2faf7 100%);
+}
+
+#cv-root .cv-session-loading__card {
+  width: min(100%, 420px);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 36px 28px;
+  border: 1px solid var(--fi-color-border);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 64px rgba(30, 41, 59, 0.09);
+  text-align: center;
+}
+
+#cv-root .cv-session-loading__mark {
+  color: var(--fi-color-brand);
+  font-family: var(--font-poppins), Poppins, sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+#cv-root .cv-session-loading__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e0e7ff;
+  border-top-color: var(--fi-color-brand);
+  border-radius: 999px;
+  animation: fi-session-spin 0.8s linear infinite;
+}
+
+#cv-root .cv-session-loading h1 {
+  margin: 4px 0 0;
+  color: var(--fi-color-ink);
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+#cv-root .cv-session-loading p {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--fi-color-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@keyframes fi-session-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Professional auth form labels and control hierarchy. */
+#cv-root .cv-auth-dream__field {
+  display: grid;
+  gap: 7px;
+}
+
+#cv-root .cv-auth-dream__field-label {
+  display: block !important;
+  margin: 0 !important;
+  color: #334155 !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  line-height: 1.35 !important;
+}
+
+.dark #cv-root .cv-auth-dream__field-label {
+  color: #e2e8f0 !important;
+}
+
+#cv-root .cv-auth-dream__form :where(input:not([type="hidden"]), select, textarea) {
+  min-height: 52px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: var(--fi-radius-control) !important;
+  background: #fff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+  color: var(--fi-color-ink) !important;
+}
+
+#cv-root .cv-auth-dream__form :where(input, select, textarea):focus {
+  border-color: var(--fi-color-brand) !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.11) !important;
+}
+
+.dark #cv-root .cv-auth-dream__form :where(input:not([type="hidden"]), select, textarea) {
+  border-color: #475569 !important;
+  background: #172033 !important;
+  color: #f8fafc !important;
+}
+
+#cv-root .cv-auth-dream__login-subtitle {
+  margin: -8px 0 22px !important;
+  color: var(--fi-color-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+}
+
+#cv-root .cv-auth-dream__submit,
+#cv-root .cv-auth-dream__create,
+#cv-root .cv-faith-google-btn {
+  min-height: 52px !important;
+  border-radius: var(--fi-radius-control) !important;
+}
+
+#cv-root .cv-auth-back-link {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  color: #475569;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+#cv-root .cv-auth-back-link:hover {
+  background: #f1f5f9;
+  color: var(--fi-color-brand-strong);
+}
+
+#cv-root .cv-auth-back-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.dark #cv-root .cv-auth-back-link {
+  color: #cbd5e1;
+}
+
+.dark #cv-root .cv-auth-back-link:hover {
+  background: #1e293b;
+  color: #c7d2fe;
+}
+
+/* Feed loading and empty states. */
+#cv-root .cv-feed-skeleton {
+  overflow: hidden;
+  padding: 20px;
+}
+
+#cv-root .cv-feed-skeleton__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#cv-root .cv-feed-skeleton__avatar,
+#cv-root .cv-feed-skeleton__line,
+#cv-root .cv-feed-skeleton__media {
+  position: relative;
+  overflow: hidden;
+  background: #e9eef5;
+}
+
+#cv-root .cv-feed-skeleton__avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 999px;
+}
+
+#cv-root .cv-feed-skeleton__copy {
+  width: min(100%, 240px);
+  display: grid;
+  gap: 8px;
+}
+
+#cv-root .cv-feed-skeleton__line {
+  width: 100%;
+  height: 11px;
+  border-radius: 999px;
+}
+
+#cv-root .cv-feed-skeleton__line--short { width: 58%; }
+
+#cv-root .cv-feed-skeleton__media {
+  height: 180px;
+  margin-top: 18px;
+  border-radius: 12px;
+}
+
+#cv-root :where(.cv-feed-skeleton__avatar, .cv-feed-skeleton__line, .cv-feed-skeleton__media)::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: fi-skeleton 1.35s ease-in-out infinite;
+}
+
+@keyframes fi-skeleton {
+  to { transform: translateX(100%); }
+}
+
+#cv-root .cv-empty-feed-card {
+  min-height: 330px;
+  display: grid !important;
+  place-items: center;
+  padding: 48px 28px !important;
+  color: var(--fi-color-muted) !important;
+}
+
+#cv-root .cv-empty-feed-card__content {
+  width: min(100%, 430px);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+#cv-root .cv-empty-feed-card__icon {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #eef2ff, #ecfdf5);
+  color: var(--fi-color-brand);
+}
+
+#cv-root .cv-empty-feed-card__icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+#cv-root .cv-empty-feed-card h2 {
+  margin: 4px 0 0;
+  color: var(--fi-color-ink);
+  font-size: clamp(20px, 3vw, 25px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+}
+
+#cv-root .cv-empty-feed-card p {
+  max-width: 42ch;
+  margin: 0;
+  color: var(--fi-color-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+#cv-root .cv-empty-feed-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+#cv-root .cv-empty-feed-card__actions button {
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  padding: 0 18px;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#cv-root .cv-empty-feed-card__actions button:first-child {
+  border-color: var(--fi-color-brand);
+  background: var(--fi-color-brand);
+  color: #fff;
+}
+
+#cv-root .cv-empty-feed-card__actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.09);
+}
+
+.dark #cv-root .cv-empty-feed-card__actions button:not(:first-child) {
+  border-color: #475569;
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+/* Toasts and dialogs use clear focus and accessible contrast. */
+#cv-toast-container .cv-toast-pill {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+}
+
+@media (max-width: 1023px) {
+  #cv-root .cv-feed-main-column {
+    max-width: 720px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  #cv-root .cv-react-stories {
+    gap: 8px !important;
+    margin-bottom: 6px !important;
+    padding: 0 10px 8px !important;
+  }
+
+  #cv-root .cv-react-story-card {
+    width: 104px !important;
+    height: 164px !important;
+    flex-basis: 104px !important;
+    border-radius: 16px !important;
+  }
+
+  #cv-root .cv-react-story-create-media {
+    height: 118px !important;
+  }
+
+  #cv-root .cv-react-story-card strong {
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    font-size: 12px !important;
+  }
+
+  #cv-root .cv-react-story-avatar {
+    top: 9px !important;
+    left: 9px !important;
+    width: 36px !important;
+    height: 36px !important;
+    border-width: 3px !important;
+  }
+
+  #cv-root .cv-feed-composer-card,
+  #cv-root .cv-feed-card {
+    width: calc(100% - 16px) !important;
+    margin-right: 8px !important;
+    margin-left: 8px !important;
+    border: 1px solid var(--fi-color-border) !important;
+    border-radius: var(--fi-radius-card) !important;
+  }
+
+  #cv-root .cv-empty-feed-card {
+    min-height: 300px;
+    padding: 40px 22px !important;
+  }
+
+  #cv-root .cv-empty-feed-card__actions {
+    width: 100%;
+  }
+
+  #cv-root .cv-empty-feed-card__actions button {
+    flex: 1 1 140px;
+  }
+
+  #cv-root .cv-auth-dream__left,
+  #cv-root .cv-auth-dream__right {
+    padding-right: 20px !important;
+    padding-left: 20px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #cv-root *,
+  #cv-root *::before,
+  #cv-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

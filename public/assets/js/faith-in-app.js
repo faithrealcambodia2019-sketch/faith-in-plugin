@@ -9,6 +9,8 @@
         resourcesLoading: false,
         resourcesError: '',
         posts: [],
+        feedLoading: true,
+        authRestoring: cvUsesFirebaseBackend() && cvHasFirebaseConfig(),
         suggestedUsers: [],
         suggestedVisibleCount: 4,
         suggestedUsersLoading: false,
@@ -741,6 +743,8 @@
         };
 
         toast.className = `cv-toast-pill cv-toast-pill--${normalizedType} toast-animate`;
+        toast.setAttribute('role', normalizedType === 'error' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', normalizedType === 'error' ? 'assertive' : 'polite');
         toast.innerHTML = `${iconMap[normalizedType]}<span>${escapeHtml(String(message || ''))}</span>`;
 
         container.appendChild(toast);
@@ -894,26 +898,26 @@ function renderUnifiedAuthCard() {
                             </div>
                             <form class="cv-auth-dream__form" onsubmit="return loginWithEmailPassword(event)" novalidate>
                                 <div class="cv-auth-dream__row">
-                                    <div class="cv-auth-dream__half">
-                                        <label for="cv-auth-first-name" class="screen-reader-text">First name</label>
-                                        <input id="cv-auth-first-name" type="text" value="${firstNameValue}" placeholder="First name" autocomplete="given-name" oninput="cvUpdateSignupName('first', this.value)" aria-invalid="${errors.name ? 'true' : 'false'}" aria-describedby="${errors.name ? 'cv-auth-name-error' : ''}" />
+                                    <div class="cv-auth-dream__half cv-auth-dream__field">
+                                        <label for="cv-auth-first-name" class="cv-auth-dream__field-label">First name</label>
+                                        <input id="cv-auth-first-name" type="text" value="${firstNameValue}" placeholder="Your first name" autocomplete="given-name" required aria-required="true" oninput="cvUpdateSignupName('first', this.value)" aria-invalid="${errors.name ? 'true' : 'false'}" aria-describedby="${errors.name ? 'cv-auth-name-error' : ''}" />
                                     </div>
-                                    <div class="cv-auth-dream__half">
-                                        <label for="cv-auth-last-name" class="screen-reader-text">Last name</label>
-                                        <input id="cv-auth-last-name" type="text" value="${lastNameValue}" placeholder="Last name" autocomplete="family-name" oninput="cvUpdateSignupName('last', this.value)" aria-invalid="${errors.name ? 'true' : 'false'}" aria-describedby="${errors.name ? 'cv-auth-name-error' : ''}" />
+                                    <div class="cv-auth-dream__half cv-auth-dream__field">
+                                        <label for="cv-auth-last-name" class="cv-auth-dream__field-label">Last name</label>
+                                        <input id="cv-auth-last-name" type="text" value="${lastNameValue}" placeholder="Your last name" autocomplete="family-name" required aria-required="true" oninput="cvUpdateSignupName('last', this.value)" aria-invalid="${errors.name ? 'true' : 'false'}" aria-describedby="${errors.name ? 'cv-auth-name-error' : ''}" />
                                     </div>
                                 </div>
                                 ${signupNameError}
                                 <label for="cv-auth-name" class="screen-reader-text">Full name</label>
                                 <input id="cv-auth-name" type="hidden" value="${nameValue}" autocomplete="name" oninput="cvUpdateAuthField('authName', this.value)" />
-                                <div>
-                                    <label for="cv-auth-email" class="screen-reader-text">Mobile number or email address</label>
-                                    <input id="cv-auth-email" type="email" inputmode="email" value="${emailValue}" placeholder="Mobile number or email address" autocomplete="username email" oninput="cvUpdateAuthField('authEmail', this.value)" aria-invalid="${errors.email ? 'true' : 'false'}" aria-describedby="${errors.email ? 'cv-auth-email-error' : ''}" />
+                                <div class="cv-auth-dream__field">
+                                    <label for="cv-auth-email" class="cv-auth-dream__field-label">Email address</label>
+                                    <input id="cv-auth-email" type="email" inputmode="email" value="${emailValue}" placeholder="you@example.com" autocomplete="username email" required aria-required="true" oninput="cvUpdateAuthField('authEmail', this.value)" aria-invalid="${errors.email ? 'true' : 'false'}" aria-describedby="${errors.email ? 'cv-auth-email-error' : ''}" />
                                     ${errors.email ? `<p id="cv-auth-email-error" class="cv-auth-dream__error">${escapeHtml(errors.email)}</p>` : ''}
                                 </div>
-                                <div>
-                                    <label for="cv-auth-password" class="screen-reader-text">New password</label>
-                                    <input id="cv-auth-password" type="password" value="${passwordValue}" placeholder="New password" autocomplete="${passwordAutocomplete}" oninput="cvUpdateAuthField('authPassword', this.value)" aria-invalid="${errors.password ? 'true' : 'false'}" aria-describedby="${errors.password ? 'cv-auth-password-error' : ''}" />
+                                <div class="cv-auth-dream__field">
+                                    <label for="cv-auth-password" class="cv-auth-dream__field-label">Create a password</label>
+                                    <input id="cv-auth-password" type="password" value="${passwordValue}" placeholder="At least 8 characters" autocomplete="${passwordAutocomplete}" required aria-required="true" oninput="cvUpdateAuthField('authPassword', this.value)" aria-invalid="${errors.password ? 'true' : 'false'}" aria-describedby="${errors.password ? 'cv-auth-password-error' : ''}" />
                                     ${errors.password ? `<p id="cv-auth-password-error" class="cv-auth-dream__error">${escapeHtml(errors.password)}</p>` : ''}
                                 </div>
                                 <p class="cv-auth-dream__terms">By clicking Sign Up, you agree to our <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>. You may receive notifications from us and can opt out at any time.</p>
@@ -925,16 +929,17 @@ function renderUnifiedAuthCard() {
                         </div>
                     ` : `
                         <div class="cv-auth-dream__form-block cv-auth-dream__animate">
-                            <h2 class="cv-auth-dream__login-title">Log in to Faith In</h2>
+                            <h2 class="cv-auth-dream__login-title">Welcome back</h2>
+                            <p class="cv-auth-dream__login-subtitle">Log in to continue to your Faith In community.</p>
                             <form class="cv-auth-dream__form" onsubmit="return loginWithEmailPassword(event)" novalidate>
-                                <div>
-                                    <label for="cv-auth-email" class="screen-reader-text">Email address or mobile number</label>
-                                    <input id="cv-auth-email" type="email" inputmode="email" value="${emailValue}" placeholder="Email address or mobile number" autocomplete="username email" oninput="cvUpdateAuthField('authEmail', this.value)" aria-invalid="${errors.email ? 'true' : 'false'}" aria-describedby="${errors.email ? 'cv-auth-email-error' : ''}" />
+                                <div class="cv-auth-dream__field">
+                                    <label for="cv-auth-email" class="cv-auth-dream__field-label">Email address</label>
+                                    <input id="cv-auth-email" type="email" inputmode="email" value="${emailValue}" placeholder="you@example.com" autocomplete="username email" required aria-required="true" oninput="cvUpdateAuthField('authEmail', this.value)" aria-invalid="${errors.email ? 'true' : 'false'}" aria-describedby="${errors.email ? 'cv-auth-email-error' : ''}" />
                                     ${errors.email ? `<p id="cv-auth-email-error" class="cv-auth-dream__error">${escapeHtml(errors.email)}</p>` : ''}
                                 </div>
-                                <div>
-                                    <label for="cv-auth-password" class="screen-reader-text">Password</label>
-                                    <input id="cv-auth-password" type="password" value="${passwordValue}" placeholder="Password" autocomplete="${passwordAutocomplete}" oninput="cvUpdateAuthField('authPassword', this.value)" aria-invalid="${errors.password ? 'true' : 'false'}" aria-describedby="${errors.password ? 'cv-auth-password-error' : ''}" />
+                                <div class="cv-auth-dream__field">
+                                    <label for="cv-auth-password" class="cv-auth-dream__field-label">Password</label>
+                                    <input id="cv-auth-password" type="password" value="${passwordValue}" placeholder="Enter your password" autocomplete="${passwordAutocomplete}" required aria-required="true" oninput="cvUpdateAuthField('authPassword', this.value)" aria-invalid="${errors.password ? 'true' : 'false'}" aria-describedby="${errors.password ? 'cv-auth-password-error' : ''}" />
                                     ${errors.password ? `<p id="cv-auth-password-error" class="cv-auth-dream__error">${escapeHtml(errors.password)}</p>` : ''}
                                 </div>
                                 <button type="submit" class="cv-auth-dream__submit" ${buttonDisabled}>${submitText}</button>
@@ -957,6 +962,19 @@ function renderMembersOnlyGate() {
     return `
         <section class="cv-members-gate cv-members-gate--auth-focused ${isDark ? 'is-dark' : ''}" aria-label="Members only access">
             ${renderUnifiedAuthCard()}
+        </section>
+    `;
+}
+
+function renderSessionLoading() {
+    return `
+        <section class="cv-session-loading" role="status" aria-live="polite" aria-labelledby="cv-session-loading-title">
+            <div class="cv-session-loading__card">
+                <div class="cv-session-loading__mark">FaithIn</div>
+                <div class="cv-session-loading__spinner" aria-hidden="true"></div>
+                <h1 id="cv-session-loading-title">Opening your community</h1>
+                <p>Restoring your secure session and preparing your feed…</p>
+            </div>
         </section>
     `;
 }
@@ -1441,11 +1459,18 @@ function cvCompleteAuth(profile, options) {
         tab: 'home',
         selectedResource: null,
         showAuthPanel: false,
+        authRestoring: false,
         authLoading: false,
         authErrors: {}
     });
 
-    if (cvUsesFirebaseBackend()) return;
+    if (cvUsesFirebaseBackend()) {
+        window.setTimeout(function() {
+            loadPosts();
+            loadResources();
+        }, 0);
+        return;
+    }
 
     // Load signed-in content immediately after the browser accepts the session cookie.
     window.setTimeout(function() {
@@ -1475,6 +1500,7 @@ function cvRestoreFirebaseSession() {
             bundle.authModule.onAuthStateChanged(bundle.auth, function(user) {
                 if (!user) {
                     if (!state.authLoading && state.isLoggedIn) cvClearLocalAuthState();
+                    else setState({ authRestoring: false });
                     return;
                 }
                 // Active signup/login flows finish their own state transition.
@@ -1490,6 +1516,7 @@ function cvRestoreFirebaseSession() {
         })
         .catch(function(error) {
             console.warn('Faith In Firebase session restore failed', error);
+            setState({ authRestoring: false });
         });
 }
 
@@ -2028,20 +2055,21 @@ window.cvOpenRegisterLink = (event) => {
     window.loadResources = loadResources;
     window.loadPosts = loadPosts;
     function loadPosts() {
+        setState({ feedLoading: true, feedError: '' });
         return ajaxRequest('cv_get_posts')
             .done(function(response) {
                 if (response && response.success) {
                     const payload = response.data;
                     const items = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.items) ? payload.items : []);
-                    setState({ posts: items, feedError: '' });
+                    setState({ posts: items, feedLoading: false, feedError: '' });
                     loadSuggestedUsers();
                 } else {
-                    setState({ posts: Array.isArray(state.posts) ? state.posts : [], feedError: (response && response.data) ? String(response.data) : 'Could not load Social Feed.' });
+                    setState({ posts: Array.isArray(state.posts) ? state.posts : [], feedLoading: false, feedError: (response && response.data) ? String(response.data) : 'Could not load Social Feed.' });
                 }
             })
             .fail(function(xhr) {
                 const message = (xhr && xhr.responseJSON && xhr.responseJSON.data) ? xhr.responseJSON.data : 'Could not load Social Feed. Please refresh and try again.';
-                setState({ posts: Array.isArray(state.posts) ? state.posts : [], feedError: String(message) });
+                setState({ posts: Array.isArray(state.posts) ? state.posts : [], feedLoading: false, feedError: String(message) });
             });
     }
 
@@ -2869,7 +2897,8 @@ function cvClearLocalAuthState() {
         authPassword: '',
         authPasswordVisible: false,
         authErrors: {},
-        authLoading: false
+        authLoading: false,
+        authRestoring: false
     });
 }
 
@@ -4368,7 +4397,10 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
             </div>
         ` : '';
         const loggedOutAction = !state.isLoggedIn ? `
-            <button type="button" onclick="openAuthPanel('login')" class="cv-studio-button cv-nav-clean-item" aria-label="Log in">Log in</button>
+            <a href="/" class="cv-auth-back-link" aria-label="Back to Faith In website">
+                <i data-lucide="arrow-left" aria-hidden="true"></i>
+                <span>Back to website</span>
+            </a>
         ` : '';
 
         return `
@@ -4378,10 +4410,10 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <a href="#" onclick="setTab('home'); return false;" class="cv-brand-name cv-logo-image-link cv-react-wordmark" aria-label="Faith In home">
                             <span class="cv-react-logo-faith">Faith</span><span class="cv-react-logo-in">In</span>
                         </a>
-                        <label class="cv-global-search cv-react-social-search" aria-label="Search Faith In">
+                        ${state.isLoggedIn ? `<label class="cv-global-search cv-react-social-search" aria-label="Search Faith In">
                             <i data-lucide="search"></i>
                             <input type="search" placeholder="Search FaithIn" onkeydown="if(event.key==='Enter'){event.preventDefault(); setTab('users'); setTimeout(function(){ var input=document.getElementById('cv-find-users-search'); if(input){ input.value=this.value; input.dispatchEvent(new Event('input',{bubbles:true})); } }.bind(this),120); }" />
-                        </label>
+                        </label>` : ''}
                     </div>
 
                     <div class="cv-nav-desktop-row cv-top-icon-nav cv-react-primary-nav cv-react-social-tabs" aria-label="Primary navigation">
@@ -5439,6 +5471,21 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         videos.slice(0, 1).forEach(video => cvPrepareFeedVideo(video, false));
     }
 
+    function cvRenderFeedSkeleton() {
+        const card = `
+            <div class="cv-feed-card cv-feed-skeleton" aria-hidden="true">
+                <div class="cv-feed-skeleton__head">
+                    <span class="cv-feed-skeleton__avatar"></span>
+                    <span class="cv-feed-skeleton__copy">
+                        <span class="cv-feed-skeleton__line"></span>
+                        <span class="cv-feed-skeleton__line cv-feed-skeleton__line--short"></span>
+                    </span>
+                </div>
+                <div class="cv-feed-skeleton__media"></div>
+            </div>`;
+        return `<div class="cv-feed-skeleton-group" role="status" aria-live="polite" aria-label="Loading community posts"><span class="screen-reader-text">Loading community posts…</span>${card}${card}</div>`;
+    }
+
     function renderHomeFeed() {
         const isDark = state.settings.theme === 'dark';
         const posts = Array.isArray(state.posts) ? state.posts : [];
@@ -5462,10 +5509,24 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <div class="space-y-6 cv-feed-stream">
         `;
 
-        if (state.feedError) {
+        if (state.feedLoading) {
+            html += cvRenderFeedSkeleton();
+        } else if (state.feedError) {
             html += `<div class="cv-feed-load-error" role="status"><strong>Social Feed could not load.</strong><p>${escapeHtml(state.feedError)}</p><button type="button" onclick="loadPosts()">Try again</button></div>`;
         } else if (filteredPosts.length === 0) {
-            html += `<div class="cv-feed-card cv-empty-feed-card"><i data-lucide="message-square" class="w-12 h-12 mx-auto mb-4"></i><p>${posts.some(cvIsBlessingPost) ? 'No feed posts yet. Blessings are shown above.' : 'No posts found.'}</p></div>`;
+            const hasBlessings = posts.some(cvIsBlessingPost);
+            html += `
+                <section class="cv-feed-card cv-empty-feed-card" aria-labelledby="cv-empty-feed-title">
+                    <div class="cv-empty-feed-card__content">
+                        <span class="cv-empty-feed-card__icon" aria-hidden="true"><i data-lucide="message-circle-heart"></i></span>
+                        <h2 id="cv-empty-feed-title">${hasBlessings ? 'Your blessings are ready above' : 'Start a meaningful conversation'}</h2>
+                        <p>${hasBlessings ? 'Share a post, prayer request, photo, or article to begin your community feed.' : 'Encourage the community with a testimony, prayer request, ministry update, or thoughtful article.'}</p>
+                        <div class="cv-empty-feed-card__actions">
+                            <button type="button" onclick="cvOpenFeedCreate('text')"><i data-lucide="plus" aria-hidden="true"></i><span>Create a post</span></button>
+                            <button type="button" onclick="setTab('users')"><i data-lucide="users" aria-hidden="true"></i><span>Find people</span></button>
+                        </div>
+                    </div>
+                </section>`;
         } else {
             filteredPosts.forEach(post => {
                 const selectedReaction = post.current_user_reaction || post.user_reaction || '';
@@ -6410,8 +6471,8 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <div class="font-extrabold text-lg truncate">${itemLabel}</div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button onclick="cancelDeleteConfirm()" class="px-5 py-4 rounded-2xl font-extrabold border-2 transition-all ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}">${escapeHtml(m.data.cancelText || 'Keep it')}</button>
-                        <button onclick="confirmDeleteAction()" class="px-5 py-4 rounded-2xl font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-600/25 transition-all flex items-center justify-center gap-2">
+                        <button type="button" onclick="cancelDeleteConfirm()" class="px-5 py-4 rounded-2xl font-extrabold border-2 transition-all ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}">${escapeHtml(m.data.cancelText || 'Keep it')}</button>
+                        <button type="button" onclick="confirmDeleteAction()" class="px-5 py-4 rounded-2xl font-extrabold text-white bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-600/25 transition-all flex items-center justify-center gap-2">
                             <i data-lucide="trash-2" class="w-5 h-5"></i>${escapeHtml(m.data.confirmText || 'Delete')}
                         </button>
                     </div>
@@ -6695,12 +6756,14 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         ? 'absolute top-3 right-3 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors z-20 text-black/60 hover:text-black/90'
                         : 'absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors')));
 
+        const modalLabel = m.type === 'confirmDelete' ? 'Delete confirmation' : 'Faith In dialog';
+
         return `
-            <div class="fixed inset-0 z-[100] flex justify-center animate-fade-in p-4 ${modalShellClass}">
-                <div class="absolute inset-0 bg-brand-dark/40 backdrop-blur-sm" onclick="closeModal()"></div>
+            <div class="fixed inset-0 z-[100] flex justify-center animate-fade-in p-4 ${modalShellClass}" role="dialog" aria-modal="true" aria-label="${modalLabel}">
+                <div class="absolute inset-0 bg-brand-dark/40 backdrop-blur-sm" onclick="closeModal()" aria-hidden="true"></div>
                 <div class="relative w-full ${panelClass}">
-                    <button onclick="closeModal()" class="${closeButtonClass}">
-                        <i data-lucide="x" class="w-6 h-6"></i>
+                    <button type="button" onclick="closeModal()" class="${closeButtonClass}" aria-label="Close dialog">
+                        <i data-lucide="x" class="w-6 h-6" aria-hidden="true"></i>
                     </button>
                     ${m.type === 'article' ? `<div class="cv-article-scroll p-6 sm:p-8 pt-10 sm:pt-12">${content}</div>` : content}
                 </div>
@@ -7485,7 +7548,9 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         let html = renderNav();
         html += `<main class="flex-1 w-full flex flex-col relative">`;
 
-        if (cvIsSignedOut() && state.tab !== 'profile') {
+        if (state.authRestoring) {
+            html += renderSessionLoading();
+        } else if (cvIsSignedOut() && state.tab !== 'profile') {
             html += renderMembersOnlyGate();
         } else if (state.selectedResource) {
             html += renderResourceDetail();
