@@ -5553,7 +5553,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                                 </div>
                             </div>
                             <div class="cv-feed-type cv-react-post-menu flex items-center gap-2 text-right shrink-0">
-                                ${cvSocialFollowButton(author)}
+                                ${post.can_delete ? '' : cvSocialFollowButton(author)}
                                 ${(post.can_edit || post.can_delete) ? `<div class="cv-post-owner-actions-top cv-owner-action-pills" aria-label="Post owner actions">
                                     ${post.can_edit ? `<button type="button" onclick="editPost('${post.id}')" class="cv-post-owner-btn cv-owner-action-pill cv-owner-action-pill--edit" aria-label="Edit post"><i data-lucide="edit-2"></i><span>Edit</span></button>` : ''}
                                     ${post.can_delete ? `<button type="button" onclick="deletePost('${post.id}')" class="cv-post-owner-btn cv-owner-action-pill cv-owner-action-pill--delete" aria-label="Delete post"><i data-lucide="trash-2"></i><span>Delete</span></button>` : ''}
