@@ -53,6 +53,7 @@
         jobDescription: '',
         jobApplyUrl: '',
         jobContactEmail: '',
+        selectedJob: null,
         showNotifs: false,
         postTitle: '',
         postExcerpt: '',
@@ -75,6 +76,7 @@
         stagedPostMedia: [],
         postAllowDownload: true,
         postVisibility: 'public',
+        showPostEmojiPicker: false,
         blessingBgColor: 'blue',
         selectedBlessingMusicFile: null,
         selectedBlessingMusicName: '',
@@ -150,6 +152,9 @@
         { id: 'v3', text: 'Trust in the Lord with all your heart and lean not on your own understanding.', ref: 'Proverbs 3:5', topics: ['faith', 'peace'] },
         { id: 'v4', text: 'He heals the brokenhearted and binds up their wounds.', ref: 'Psalm 147:3', topics: ['healing', 'love'] }
     ];
+
+    const CV_POST_EMOJIS = ['🙏', '❤️', '🙌', '😊', '✨', '🕊️', '📖', '⛪', '💙', '👏', '🔥', '🌿'];
+    const CV_RESOURCE_DRAFT_KEY = 'faithin_resource_draft_v1';
 
     // Utility functions
     function escapeHtml(value) {
@@ -3619,6 +3624,7 @@ window.signOut = () => {
                     selectedFileName: '', selectedResourceFile: null, selectedThumbnailName: '', selectedThumbnailFile: null, thumbnailPreviewUrl: '',
                     exploreSort: 'Newest'
                 });
+                cvClearResourceDraft();
                 const fileNameDisplay = document.getElementById('file-name-display');
                 if (fileNameDisplay) fileNameDisplay.textContent = 'No file selected';
                 const thumbNameDisplay = document.getElementById('thumbnail-name-display');
@@ -3659,7 +3665,33 @@ window.signOut = () => {
         }
     };
 
-    window.setCreateMode = (createMode) => setState({ createMode });
+    window.setCreateMode = (createMode) => {
+        if (createMode === 'resource') {
+            const draft = cvReadResourceDraft();
+            setState(Object.assign({ createMode: 'resource' }, draft || {}));
+            if (draft) window.setTimeout(function() { window.showToast('Your saved resource draft was restored.', 'info'); }, 50);
+            return;
+        }
+        setState({ createMode: 'post' });
+    };
+    window.cvTogglePostEmojiPicker = () => setState({ showPostEmojiPicker: !state.showPostEmojiPicker });
+    window.cvInsertPostEmoji = (index) => {
+        const emoji = CV_POST_EMOJIS[parseInt(index, 10)];
+        if (!emoji) return;
+        const textarea = document.getElementById('post-content-textarea');
+        const content = String(state.postContent || '');
+        const start = textarea && Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : content.length;
+        const end = textarea && Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+        const nextContent = content.slice(0, start) + emoji + content.slice(end);
+        const nextCaret = start + emoji.length;
+        setState({ postContent: nextContent, showPostEmojiPicker: false });
+        window.requestAnimationFrame(function() {
+            const nextTextarea = document.getElementById('post-content-textarea');
+            if (!nextTextarea) return;
+            nextTextarea.focus();
+            if (nextTextarea.setSelectionRange) nextTextarea.setSelectionRange(nextCaret, nextCaret);
+        });
+    };
     window.cvPostingOpenMedia = (kind) => {
         const input = document.getElementById('post-cover-image');
         if (!input) return;
@@ -4044,6 +4076,15 @@ window.signOut = () => {
         setState({ showJobForm: true, editingJobId: null, jobTitle: '', jobOrganization: '', jobLocationField: '', jobType: 'Full-time', jobDescription: '', jobApplyUrl: '', jobContactEmail: '' });
     };
     window.cancelJobForm = () => setState({ showJobForm: false, editingJobId: null });
+    window.openJobDetails = (id) => {
+        const job = (state.jobs || []).find(item => String(item.id) === String(id));
+        if (!job) {
+            window.showToast('That job is no longer available.', 'info');
+            return;
+        }
+        setState({ selectedJob: job });
+    };
+    window.closeJobDetails = () => setState({ selectedJob: null });
     window.editJob = (id) => {
         const job = (state.jobs || []).find(j => String(j.id) === String(id));
         if (!job || !job.can_edit) {
@@ -4119,6 +4160,56 @@ window.signOut = () => {
                 });
             }
         });
+    };
+
+    function cvReadResourceDraft() {
+        try {
+            const raw = window.localStorage ? window.localStorage.getItem(CV_RESOURCE_DRAFT_KEY) : '';
+            const draft = raw ? JSON.parse(raw) : null;
+            if (!draft || typeof draft !== 'object') return null;
+            return {
+                resTitle: String(draft.resTitle || '').slice(0, 300),
+                resFormat: ['pdf', 'video', 'audio', 'image', 'zip'].includes(String(draft.resFormat || '').toLowerCase()) ? String(draft.resFormat).toLowerCase() : 'pdf',
+                resCategory: String(draft.resCategory || 'Bible Study').slice(0, 100),
+                contributorName: String(draft.contributorName || '').slice(0, 200),
+                contributorRole: String(draft.contributorRole || '').slice(0, 200),
+                contributorChurch: String(draft.contributorChurch || '').slice(0, 200),
+                contributorMinistry: String(draft.contributorMinistry || '').slice(0, 200)
+            };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function cvClearResourceDraft() {
+        try {
+            if (window.localStorage) window.localStorage.removeItem(CV_RESOURCE_DRAFT_KEY);
+        } catch (error) {}
+    }
+
+    window.cvSaveResourceDraft = () => {
+        const draft = {
+            resTitle: state.resTitle,
+            resFormat: state.resFormat,
+            resCategory: state.resCategory,
+            contributorName: state.contributorName,
+            contributorRole: state.contributorRole,
+            contributorChurch: state.contributorChurch,
+            contributorMinistry: state.contributorMinistry,
+            savedAt: new Date().toISOString()
+        };
+        const meaningfulValues = [draft.resTitle, draft.contributorName, draft.contributorRole, draft.contributorChurch, draft.contributorMinistry];
+        if (!meaningfulValues.some(value => String(value || '').trim())) {
+            window.showToast('Add some resource details before saving a draft.', 'info');
+            return;
+        }
+        try {
+            if (!window.localStorage) throw new Error('Draft storage unavailable');
+            window.localStorage.setItem(CV_RESOURCE_DRAFT_KEY, JSON.stringify(draft));
+            window.showToast('Draft saved on this device. Choose the files again when you return.', 'success');
+        } catch (error) {
+            window.showToast('We could not save this draft on your device.', 'error');
+        }
     };
 
     window.updateProfileCover = (input) => {
@@ -5875,19 +5966,19 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <form id="post-job-form" onsubmit="event.preventDefault(); submitJob();" class="cv-job-modal-form space-y-5">
                             <div class="cv-job-modal-stack space-y-4">
                                 <div>
-                                    <label class="block text-sm font-semibold text-black/90 mb-1">Job title *</label>
-                                    <input required type="text" value="${escapeAttr(state.jobTitle)}" oninput="updateJobField('jobTitle', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
+                                    <label for="cv-job-title" class="block text-sm font-semibold text-black/90 mb-1">Job title *</label>
+                                    <input id="cv-job-title" required type="text" autocomplete="organization-title" value="${escapeAttr(state.jobTitle)}" oninput="updateJobField('jobTitle', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-semibold text-black/90 mb-1">Company / Organization *</label>
-                                    <input required type="text" value="${escapeAttr(state.jobOrganization)}" oninput="updateJobField('jobOrganization', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
+                                    <label for="cv-job-organization" class="block text-sm font-semibold text-black/90 mb-1">Company / Organization *</label>
+                                    <input id="cv-job-organization" required type="text" autocomplete="organization" value="${escapeAttr(state.jobOrganization)}" oninput="updateJobField('jobOrganization', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-semibold text-black/90 mb-1">Workplace type</label>
+                                    <label for="cv-job-type" class="block text-sm font-semibold text-black/90 mb-1">Workplace type</label>
                                     <div class="relative">
-                                        <select onchange="updateJobField('jobType', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 appearance-none cursor-pointer bg-white cv-job-modal-input">
+                                        <select id="cv-job-type" onchange="updateJobField('jobType', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 appearance-none cursor-pointer bg-white cv-job-modal-input">
                                             <option value="On-site" ${state.jobType === 'On-site' ? 'selected' : ''}>On-site</option>
                                             <option value="Hybrid" ${state.jobType === 'Hybrid' ? 'selected' : ''}>Hybrid</option>
                                             <option value="Remote" ${state.jobType === 'Remote' ? 'selected' : ''}>Remote</option>
@@ -5902,14 +5993,27 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                                 </div>
 
                                 <div>
-                                    <label class="block text-sm font-semibold text-black/90 mb-1">Job location *</label>
-                                    <input required type="text" value="${escapeAttr(state.jobLocationField)}" oninput="updateJobField('jobLocationField', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
+                                    <label for="cv-job-location" class="block text-sm font-semibold text-black/90 mb-1">Job location *</label>
+                                    <input id="cv-job-location" required type="text" autocomplete="address-level2" value="${escapeAttr(state.jobLocationField)}" oninput="updateJobField('jobLocationField', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
                                 </div>
                             </div>
 
                             <div class="pt-2">
-                                <label class="block text-sm font-semibold text-black/90 mb-1">Job description</label>
-                                <textarea required oninput="updateJobField('jobDescription', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 h-32 resize-none bg-white cv-job-modal-textarea">${escapeHtml(state.jobDescription)}</textarea>
+                                <label for="cv-job-description" class="block text-sm font-semibold text-black/90 mb-1">Job description</label>
+                                <textarea id="cv-job-description" required oninput="updateJobField('jobDescription', this.value)" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 h-32 resize-none bg-white cv-job-modal-textarea">${escapeHtml(state.jobDescription)}</textarea>
+                            </div>
+
+                            <div class="cv-job-application-fields">
+                                <div>
+                                    <label for="cv-job-apply-url" class="block text-sm font-semibold text-black/90 mb-1">Secure application link</label>
+                                    <input id="cv-job-apply-url" type="url" inputmode="url" value="${escapeAttr(state.jobApplyUrl)}" oninput="updateJobField('jobApplyUrl', this.value)" placeholder="https://example.org/apply" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
+                                </div>
+                                <div class="cv-job-field-divider" aria-hidden="true"><span>or</span></div>
+                                <div>
+                                    <label for="cv-job-contact-email" class="block text-sm font-semibold text-black/90 mb-1">Application email</label>
+                                    <input id="cv-job-contact-email" type="email" inputmode="email" value="${escapeAttr(state.jobContactEmail)}" oninput="updateJobField('jobContactEmail', this.value)" placeholder="jobs@example.org" class="w-full border border-black/60 rounded-md p-2 outline-none focus:border-black/90 focus:ring-1 focus:ring-black/90 transition-all text-black/90 bg-white cv-job-modal-input" />
+                                </div>
+                                <p class="cv-job-application-help">Add at least one application method. FaithIn only accepts secure HTTPS links.</p>
                             </div>
                         </form>
                     </div>
@@ -5919,6 +6023,31 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <button type="submit" form="post-job-form" class="cv-job-primary-btn bg-[#469b76] hover:bg-[#388462] text-white px-5 py-1.5 rounded-full font-semibold text-sm transition-colors"><span class="cv-job-btn-label">${state.editingJobId ? 'Update job' : 'Post job'}</span></button>
                     </div>
                 </div>
+            </div>` : '';
+
+        const selectedJob = state.selectedJob;
+        const selectedJobApplyUrl = selectedJob && /^https:\/\//i.test(String(selectedJob.apply_url || '')) ? String(selectedJob.apply_url) : '';
+        const selectedJobEmail = selectedJob && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(selectedJob.contact_email || '')) ? String(selectedJob.contact_email) : '';
+        const selectedJobMailHref = selectedJobEmail ? `mailto:${escapeAttr(selectedJobEmail)}?subject=${encodeURIComponent('Application: ' + String((selectedJob && selectedJob.title) || 'FaithIn opportunity'))}` : '';
+        const detailsModal = selectedJob ? `
+            <div class="cv-job-modal-overlay cv-job-details-overlay fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60" role="dialog" aria-modal="true" aria-labelledby="cv-job-details-title">
+                <button type="button" class="cv-job-details-backdrop" onclick="closeJobDetails()" aria-label="Close job details"></button>
+                <article class="cv-job-details-panel">
+                    <header class="cv-job-details-header">
+                        <div class="cv-job-details-icon"><i data-lucide="briefcase-business"></i></div>
+                        <div><span>Ministry opportunity</span><h2 id="cv-job-details-title">${escapeHtml(selectedJob.title || 'Untitled job')}</h2><p>${escapeHtml(selectedJob.organization || 'Organization')}</p></div>
+                        <button type="button" class="cv-job-details-close" onclick="closeJobDetails()" aria-label="Close job details"><i data-lucide="x"></i></button>
+                    </header>
+                    <div class="cv-job-details-body">
+                        <div class="cv-job-details-meta"><span><i data-lucide="map-pin"></i>${escapeHtml(selectedJob.location || 'Location not listed')}</span><span><i data-lucide="clock-3"></i>${escapeHtml(selectedJob.job_type || 'Full-time')}</span><span><i data-lucide="calendar-clock"></i>${escapeHtml(selectedJob.time || 'Recently')}</span></div>
+                        <section><h3>About this role</h3><p>${escapeHtml(selectedJob.description || 'Contact the organization for role details.')}</p></section>
+                    </div>
+                    <footer class="cv-job-details-actions">
+                        <button type="button" class="cv-job-details-secondary" onclick="closeJobDetails()">Close</button>
+                        ${selectedJobApplyUrl ? `<a class="cv-job-apply-button" href="${escapeAttr(selectedJobApplyUrl)}" target="_blank" rel="noopener noreferrer"><span>Apply on organization site</span><i data-lucide="external-link"></i></a>` : ''}
+                        ${!selectedJobApplyUrl && selectedJobMailHref ? `<a class="cv-job-apply-button" href="${selectedJobMailHref}"><span>Apply by email</span><i data-lucide="mail"></i></a>` : ''}
+                    </footer>
+                </article>
             </div>` : '';
 
         let html = `
@@ -5974,7 +6103,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                 const isNew = String(job.time || '').toLowerCase().includes('second') || String(job.time || '').toLowerCase().includes('minute') || String(job.time || '').toLowerCase() === 'just now';
                 const isPromoted = !!(job.is_promoted || job.promoted || job.featured);
                 html += `
-                    <div class="flex gap-4 p-4 border-b border-[#e0dfdc] cursor-pointer hover:bg-gray-50 transition-colors group last:border-b-0">
+                    <div class="cv-job-result-card flex gap-4 p-4 border-b border-[#e0dfdc] cursor-pointer hover:bg-gray-50 transition-colors group last:border-b-0" role="button" tabindex="0" onclick="openJobDetails('${escapeAttr(job.id)}')" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();openJobDetails('${escapeAttr(job.id)}')}" aria-label="View ${escapeAttr(job.title || 'job')} details">
                         <div class="w-14 h-14 bg-[#f3f2ef] flex-shrink-0 flex items-center justify-center rounded-sm">
                             <i data-lucide="building" class="w-8 h-8 text-black/60"></i>
                         </div>
@@ -5996,7 +6125,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                                     </span>`}
                             </div>
                             <p class="text-black/60 text-xs mt-3 flex items-center gap-1">
-                                ${escapeHtml(job.time || 'Recently')} • ${isPromoted ? 'Promoted' : '<span class="font-semibold text-black/90">Easy Apply</span>'}
+                                ${escapeHtml(job.time || 'Recently')} • ${isPromoted ? 'Promoted' : '<span class="font-semibold text-black/90">Apply now</span>'}
                             </p>
                             ${(job.can_edit || job.can_delete) ? `<div class="cv-owner-action-pills cv-job-owner-tools" aria-label="Job owner actions">
                                 ${job.can_edit ? `<button type="button" onclick="event.stopPropagation(); editJob('${job.id}')" class="cv-owner-action-pill cv-owner-action-pill--edit" aria-label="Edit job post"><i data-lucide="edit-2"></i><span>Edit</span></button>` : ''}
@@ -6012,6 +6141,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                     </div>
                 </div>
                 ${formModal}
+                ${detailsModal}
             </div>`;
         return html;
     }
@@ -6255,7 +6385,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         <div class="p-4 border-t border-[#E0DFDC] bg-white flex justify-end gap-3 rounded-b-lg">
                             <button
                                 type="button"
-                                onclick="window.showToast('Draft saving is coming soon.', 'info')"
+                                onclick="cvSaveResourceDraft()"
                                 class="px-4 py-2 rounded-full text-sm font-semibold text-[rgba(0,0,0,0.6)] hover:bg-[#F3F2EF] hover:text-[rgba(0,0,0,0.9)] transition-colors"
                             >Save as draft</button>
                             <button
@@ -6439,7 +6569,8 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                         ` : ''}
 
                         <div class="cv-posting-smile-row">
-                            <button type="button" aria-label="Emoji" onclick="window.showToast('Emoji picker coming soon.', 'info')"><i data-lucide="smile" class="w-6 h-6"></i></button>
+                            <button type="button" aria-label="Choose an emoji" aria-expanded="${state.showPostEmojiPicker ? 'true' : 'false'}" aria-controls="cv-post-emoji-picker" onclick="cvTogglePostEmojiPicker()"><i data-lucide="smile" class="w-6 h-6"></i></button>
+                            ${state.showPostEmojiPicker ? `<div id="cv-post-emoji-picker" class="cv-post-emoji-picker" role="group" aria-label="Choose an emoji">${CV_POST_EMOJIS.map(function(emoji, index) { return `<button type="button" onclick="cvInsertPostEmoji(${index})" aria-label="Insert ${escapeAttr(emoji)}">${emoji}</button>`; }).join('')}</div>` : ''}
                         </div>
                     </div>
 
@@ -6453,8 +6584,6 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
                                 <button type="button" class="cv-posting-tool cv-posting-tool--image ${hasMedia && !isReel ? 'is-active' : ''}" onclick="cvPostingOpenMedia('image')" aria-label="Add a photo"><i data-lucide="image" class="w-6 h-6"></i><span>Add a photo</span></button>
                                 <button type="button" class="cv-posting-tool cv-posting-tool--reel ${isReel ? 'is-active' : ''}" onclick="cvPostingOpenMedia('reel')" aria-label="Add a reel"><i data-lucide="clapperboard" class="w-6 h-6"></i><span>Add a reel</span></button>
                                 <button type="button" class="cv-posting-tool cv-posting-tool--article ${isArticleComposer ? 'is-active' : ''}" onclick="cvPostingSetPostType('Article')" aria-label="Write article"><i data-lucide="file-text" class="w-6 h-6"></i><span>Write article</span></button>
-                                <span class="cv-posting-tool-divider" aria-hidden="true"></span>
-                                <button type="button" class="cv-posting-tool cv-posting-tool--more" onclick="window.showToast('More posting options coming soon.', 'info')" aria-label="More"><i data-lucide="more-horizontal" class="w-6 h-6"></i><span>More</span></button>
                             `}
                         </div>
 

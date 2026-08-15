@@ -1138,6 +1138,280 @@
     .curated-vault-premium-wrap .cv-feed-messenger-button strong { display:none; }
 }
 
+/* v5.5.206 - complete publishing and ministry-job interactions. */
+#cv-root .cv-posting-smile-row,
+.curated-vault-premium-wrap .cv-posting-smile-row {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+}
+#cv-root .cv-post-emoji-picker,
+.curated-vault-premium-wrap .cv-post-emoji-picker {
+    position: absolute !important;
+    left: 0 !important;
+    bottom: 54px !important;
+    z-index: 60 !important;
+    display: grid !important;
+    grid-template-columns: repeat(6, 40px) !important;
+    gap: 4px !important;
+    padding: 10px !important;
+    border: 1px solid #dbe3ef !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, .18) !important;
+}
+#cv-root .cv-posting-smile-row .cv-post-emoji-picker button,
+.curated-vault-premium-wrap .cv-posting-smile-row .cv-post-emoji-picker button {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    font-size: 21px !important;
+}
+#cv-root .cv-posting-smile-row .cv-post-emoji-picker button:hover,
+#cv-root .cv-posting-smile-row .cv-post-emoji-picker button:focus-visible,
+.curated-vault-premium-wrap .cv-posting-smile-row .cv-post-emoji-picker button:hover,
+.curated-vault-premium-wrap .cv-posting-smile-row .cv-post-emoji-picker button:focus-visible {
+    background: #eaf2ff !important;
+    outline: 2px solid #2563eb !important;
+    outline-offset: 1px !important;
+}
+#cv-root .cv-job-application-fields {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr) !important;
+    align-items: end !important;
+    gap: 10px !important;
+    padding: 14px !important;
+    border: 1px solid #dbe3ef !important;
+    border-radius: 10px !important;
+    background: #f8fafc !important;
+}
+#cv-root .cv-job-field-divider {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 44px !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+}
+#cv-root .cv-job-application-help {
+    grid-column: 1 / -1 !important;
+    margin: 0 !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+}
+#cv-root .cv-job-result-card:focus-visible {
+    position: relative !important;
+    z-index: 2 !important;
+    outline: 3px solid rgba(37, 99, 235, .28) !important;
+    outline-offset: -3px !important;
+    background: #eff6ff !important;
+}
+#cv-root .cv-job-details-overlay {
+    isolation: isolate !important;
+}
+#cv-root .cv-job-details-backdrop {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+#cv-root .cv-job-details-panel {
+    position: relative !important;
+    z-index: 1 !important;
+    width: min(620px, calc(100vw - 32px)) !important;
+    max-height: calc(100dvh - 40px) !important;
+    overflow: auto !important;
+    border: 1px solid rgba(148, 163, 184, .35) !important;
+    border-radius: 20px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: 0 28px 90px rgba(15, 23, 42, .34) !important;
+}
+#cv-root .cv-job-details-header {
+    display: grid !important;
+    grid-template-columns: 54px minmax(0, 1fr) 38px !important;
+    gap: 14px !important;
+    align-items: start !important;
+    padding: 22px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    background: linear-gradient(145deg, #f8fbff 0%, #eef4ff 100%) !important;
+}
+#cv-root .cv-job-details-icon {
+    width: 54px !important;
+    height: 54px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 16px !important;
+    background: linear-gradient(145deg, #2563eb, #4f46e5) !important;
+    color: #ffffff !important;
+}
+#cv-root .cv-job-details-icon svg {
+    width: 26px !important;
+    height: 26px !important;
+}
+#cv-root .cv-job-details-header span {
+    color: #2563eb !important;
+    font-size: 11px !important;
+    font-weight: 900 !important;
+    letter-spacing: .08em !important;
+    text-transform: uppercase !important;
+}
+#cv-root .cv-job-details-header h2 {
+    margin: 3px 0 2px !important;
+    color: #0f172a !important;
+    font-size: 24px !important;
+    line-height: 1.2 !important;
+    font-weight: 850 !important;
+}
+#cv-root .cv-job-details-header p {
+    margin: 0 !important;
+    color: #475569 !important;
+    font-size: 14px !important;
+    font-weight: 650 !important;
+}
+#cv-root .cv-job-details-close {
+    width: 38px !important;
+    height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #ffffff !important;
+    color: #475569 !important;
+    cursor: pointer !important;
+}
+#cv-root .cv-job-details-body {
+    padding: 22px !important;
+}
+#cv-root .cv-job-details-meta {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-bottom: 22px !important;
+}
+#cv-root .cv-job-details-meta span {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+    border-radius: 999px !important;
+    background: #f1f5f9 !important;
+    color: #334155 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+}
+#cv-root .cv-job-details-meta svg {
+    width: 15px !important;
+    height: 15px !important;
+    color: #2563eb !important;
+}
+#cv-root .cv-job-details-body h3 {
+    margin: 0 0 8px !important;
+    color: #0f172a !important;
+    font-size: 16px !important;
+    font-weight: 850 !important;
+}
+#cv-root .cv-job-details-body section p {
+    margin: 0 !important;
+    color: #475569 !important;
+    white-space: pre-wrap !important;
+    font-size: 15px !important;
+    line-height: 1.7 !important;
+}
+#cv-root .cv-job-details-actions {
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    padding: 16px 22px !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background: #ffffff !important;
+}
+#cv-root .cv-job-details-secondary,
+#cv-root .cv-job-apply-button {
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    padding: 0 18px !important;
+    border-radius: 999px !important;
+    font-size: 14px !important;
+    font-weight: 800 !important;
+    text-decoration: none !important;
+    cursor: pointer !important;
+}
+#cv-root .cv-job-details-secondary {
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #334155 !important;
+}
+#cv-root .cv-job-apply-button {
+    border: 1px solid #2563eb !important;
+    background: linear-gradient(135deg, #2563eb, #4f46e5) !important;
+    color: #ffffff !important;
+}
+#cv-root .cv-job-apply-button svg {
+    width: 17px !important;
+    height: 17px !important;
+}
+#cv-root .cv-job-details-close:focus-visible,
+#cv-root .cv-job-details-secondary:focus-visible,
+#cv-root .cv-job-apply-button:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, .25) !important;
+    outline-offset: 3px !important;
+}
+@media (max-width: 640px) {
+    #cv-root .cv-post-emoji-picker,
+    .curated-vault-premium-wrap .cv-post-emoji-picker {
+        grid-template-columns: repeat(4, 40px) !important;
+    }
+    #cv-root .cv-job-application-fields {
+        grid-template-columns: 1fr !important;
+    }
+    #cv-root .cv-job-field-divider {
+        height: 18px !important;
+    }
+    #cv-root .cv-job-details-panel {
+        width: calc(100vw - 20px) !important;
+        max-height: calc(100dvh - 20px) !important;
+        border-radius: 16px !important;
+    }
+    #cv-root .cv-job-details-header {
+        grid-template-columns: 44px minmax(0, 1fr) 36px !important;
+        gap: 10px !important;
+        padding: 18px !important;
+    }
+    #cv-root .cv-job-details-icon {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 13px !important;
+    }
+    #cv-root .cv-job-details-header h2 {
+        font-size: 20px !important;
+    }
+    #cv-root .cv-job-details-body {
+        padding: 18px !important;
+    }
+    #cv-root .cv-job-details-actions {
+        flex-direction: column-reverse !important;
+        padding: 14px 18px 18px !important;
+    }
+    #cv-root .cv-job-details-secondary,
+    #cv-root .cv-job-apply-button {
+        width: 100% !important;
+    }
+}
+
 
 /* All social notifications bell inside the main feed */
 .curated-vault-premium-wrap .cv-feed-notifications-button {
