@@ -2115,8 +2115,16 @@ window.cvOpenRegisterLink = (event) => {
     function loadJobs() {
         ajaxRequest('cv_get_jobs').done(function(response) {
             if (response.success) {
-                setState({ jobs: response.data });
+                const payload = response.data;
+                const items = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.items) ? payload.items : []);
+                setState({ jobs: items });
+            } else {
+                setState({ jobs: Array.isArray(state.jobs) ? state.jobs : [] });
+                window.showToast((response && response.data) ? String(response.data) : 'Could not load jobs.', 'error');
             }
+        }).fail(function(xhr) {
+            setState({ jobs: Array.isArray(state.jobs) ? state.jobs : [] });
+            window.showToast((xhr && xhr.responseJSON && xhr.responseJSON.data) ? xhr.responseJSON.data : 'Could not load jobs.', 'error');
         });
     }
 
@@ -5941,7 +5949,7 @@ const previewUser = { ...(state.currentUser || {}), name: state.profileName || (
         ];
         const search = String(state.jobSearch || '').toLowerCase().trim();
         const location = String(state.jobLocation || '').toLowerCase().trim();
-        const jobs = (state.jobs || []).filter(job => {
+        const jobs = (Array.isArray(state.jobs) ? state.jobs : []).filter(job => {
             const haystack = [job.title, job.organization, job.description, job.job_type].join(' ').toLowerCase();
             const loc = String(job.location || '').toLowerCase();
             const matchesSearch = !search || haystack.includes(search);
