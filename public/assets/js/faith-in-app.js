@@ -1139,27 +1139,20 @@ function renderGoogleButtonIfNeeded() {
     }
     const clientId = cvGoogleClientId();
     if (!clientId) {
-        // Google sign-in is not configured. This is a deployment setting, not
-        // something a visitor can act on, so hide the option entirely (and the
-        // "Or sign in with" divider above it) rather than showing setup
-        // instructions on the public login screen. The note goes to the console
-        // for whoever is configuring the deployment.
-        const origin = (typeof cv_ajax !== 'undefined' && cv_ajax.auth && cv_ajax.auth.site_origin) ? String(cv_ajax.auth.site_origin) : window.location.origin;
-        if (window.console && typeof console.info === 'function') {
-            console.info('[Faith In] Google sign-in is hidden because no OAuth Client ID is set. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID with authorised origin: ' + origin);
-        }
-        target.innerHTML = '';
-        target.setAttribute('hidden', 'hidden');
-        target.style.setProperty('display', 'none', 'important');
-        const divider = target.parentElement ? target.parentElement.querySelector('.cv-auth-dream__divider') : null;
-        if (divider) {
-            divider.setAttribute('hidden', 'hidden');
-            divider.style.setProperty('display', 'none', 'important');
-        }
+        // No Google Identity Services client ID is configured — but one is not
+        // needed. Firebase Authentication's GoogleAuthProvider runs the whole
+        // OAuth flow itself using the OAuth client Firebase creates when Google
+        // is enabled as a sign-in provider. So render our own button wired to
+        // startFirebaseGoogleSignIn() rather than hiding the option.
+        //
+        // Requirement: in the Firebase console, enable Authentication →
+        // Sign-in method → Google, and add faithin.co under Authorized domains.
+        target.innerHTML = cvFirebaseGoogleButtonHtml();
         return;
     }
 
-    // Always use the official Google Identity Services button. Do not use the
+    // A GIS client ID is configured, so use the official Google Identity
+    // Services button instead. Do not use the
     // old google.accounts.id.prompt() fallback because it hangs on mobile and
     // leaves the button at "Opening Google...".
     if (cvInitializeGoogleIdentity() && cvRenderNativeGoogleButton(target)) {
@@ -1292,7 +1285,9 @@ function cvFirebaseErrorMessage(error) {
             return 'Google sign-in needs this domain added in Firebase. Add ' + cvCurrentSiteDomain() + ' under Firebase Authentication > Settings > Authorized domains, then refresh.';
         case 'auth/configuration-not-found':
         case 'auth/operation-not-allowed':
-            return 'This Firebase sign-in method is not enabled yet.';
+            // Almost always means Google has not been switched on as a sign-in
+            // provider in the Firebase console.
+            return 'Google sign-in is not enabled for this project yet. Enable it in Firebase Console > Authentication > Sign-in method > Google, then refresh.';
         case 'permission-denied':
         case 'firestore/permission-denied':
             return 'Your account was created, but Firestore blocked saving the profile. Check the users/{uid} Firestore rule and try logging in.';
@@ -1556,6 +1551,31 @@ window.startFirebaseGoogleSignIn = (event) => {
             window.showToast('Signed in with Google.', 'success');
         })
         .catch(function(error) {
+            const code = (error && error.code) ? String(error.code) : '';
+
+            // The member closed the popup, or a second popup superseded the
+            // first. Neither is an error worth showing them.
+            if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+                return;
+            }
+
+            // Popups are blocked (common on in-app browsers and iOS). Fall back
+            // to the full-page redirect flow, which cvRestoreFirebaseSession()
+            // picks up via onAuthStateChanged when the browser comes back.
+            if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                window.showToast('Opening Google sign-in...', 'info');
+                cvGetFirebaseAuthBundle()
+                    .then(function(bundle) {
+                        const provider = new bundle.authModule.GoogleAuthProvider();
+                        provider.setCustomParameters({ prompt: 'select_account' });
+                        return bundle.authModule.signInWithRedirect(bundle.auth, provider);
+                    })
+                    .catch(function(redirectError) {
+                        window.showToast(cvFirebaseErrorMessage(redirectError), 'error');
+                    });
+                return;
+            }
+
             window.showToast(cvFirebaseErrorMessage(error), 'error');
         })
         .finally(function() {

@@ -577,18 +577,601 @@
         });
     };
 
-    actions.cv_get_suggested_users = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_find_users = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_get_resources = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_get_prayers = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_get_jobs = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_social_get_followers = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_social_get_following = function () { return Promise.resolve({ items: [] }); };
-    actions.cv_get_verification_status = function () {
-        return Promise.resolve({ verification: null, request: null, tiers: [] });
+    actions.cv_update_post = function (b, params) {
+        var id = text(params.post_id || params.id);
+        if (!id) throw new Error('That post could not be found.');
+        return requireUser(b).then(function () {
+            var update = { updatedAt: b.dbMod.serverTimestamp() };
+            if (params.content !== undefined) update.content = text(params.content);
+            if (params.title !== undefined) update.title = text(params.title, 300);
+            if (params.post_visibility !== undefined) update.visibility = visibilityOf(params.post_visibility);
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), update).then(function () {
+                return { id: id, updated: true };
+            });
+        });
     };
+
+    /** Bumps a numeric counter on a post (shares, reposts). */
+    function bumpPostCounter(b, params, field) {
+        var id = text(params.post_id || params.id);
+        if (!id) throw new Error('That post could not be found.');
+        return requireUser(b).then(function () {
+            var update = {};
+            update[field] = b.dbMod.increment(1);
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'posts', id), update).then(function () {
+                return { id: id, ok: true };
+            });
+        });
+    }
+
+    actions.cv_share_post = function (b, params) { return bumpPostCounter(b, params, 'share_count'); };
+    actions.cv_repost_post = function (b, params) { return bumpPostCounter(b, params, 'repost_count'); };
+
+    // ---------------------------------------------------------------------
+    // Resource library
+    // ---------------------------------------------------------------------
+
+    function shapeResource(id, data, viewer) {
+        var author = data.author || {};
+        return {
+            id: id,
+            title: text(data.title),
+            description: text(data.description),
+            category: text(data.category || 'Bible Study'),
+            format: text(data.format || 'pdf'),
+            type: text(data.format || 'pdf'),
+            author: text(author.name || 'Faith In Member'),
+            author_avatar: text(author.avatar_url),
+            author_title: text(author.role),
+            contributor_title: text(author.role),
+            country: text(data.country),
+            file_url: text(data.file_url),
+            url: text(data.file_url),
+            download_url: text(data.file_url),
+            open_url: text(data.file_url),
+            filename: text(data.filename),
+            external: false,
+            source: 'faithin',
+            cover_image_url: text(data.thumbnail_url),
+            image_url: text(data.thumbnail_url),
+            thumbnail_url: text(data.thumbnail_url),
+            downloads: parseInt(data.download_count || 0, 10),
+            download_count: parseInt(data.download_count || 0, 10),
+            views: parseInt(data.view_count || 0, 10),
+            view_count: parseInt(data.view_count || 0, 10),
+            time: relativeTime(toDate(data.createdAt)),
+            can_edit: !!(viewer && data.authorUid === viewer.uid),
+            can_delete: !!(viewer && data.authorUid === viewer.uid)
+        };
+    }
+
+    actions.cv_get_resources = function (b) {
+        return currentUser(b).then(function (user) {
+            var q = b.dbMod.query(
+                b.dbMod.collection(b.db, 'resources'),
+                b.dbMod.orderBy('createdAt', 'desc'),
+                b.dbMod.limit(FEED_PAGE_SIZE)
+            );
+            return b.dbMod.getDocs(q).then(function (snap) {
+                var items = [];
+                snap.forEach(function (d) { items.push(shapeResource(d.id, d.data(), user)); });
+                return { items: items };
+            });
+        });
+    };
+
+    actions.cv_upload_resource = function (b, params, files, onProgress) {
+        return requireUser(b).then(function (user) {
+            return loadProfile(b, user).then(function (profile) {
+                var main = files.resource_file || files.file || [];
+                var thumb = files.thumbnail || files.thumbnail_file || [];
+                var title = text(params.title || params.res_title, 300);
+                if (!title) throw new Error('Give the resource a title before publishing.');
+                if (!main.length) throw new Error('Choose a file to publish.');
+
+                return uploadAll(b, user, main, onProgress).then(function (uploaded) {
+                    return uploadAll(b, user, thumb).then(function (thumbs) {
+                        var doc = {
+                            authorUid: user.uid,
+                            author: {
+                                uid: user.uid,
+                                name: text(params.contributor_name || profile.name),
+                                avatar_url: profile.avatar_url,
+                                role: text(params.contributor_role || profile.role),
+                                church: text(params.contributor_church || profile.church),
+                                ministry: text(params.contributor_ministry || profile.ministry)
+                            },
+                            title: title,
+                            description: text(params.description, 2000),
+                            category: text(params.category || params.res_category || 'Bible Study'),
+                            format: text(params.format || params.res_format || 'pdf'),
+                            country: text(params.country),
+                            file_url: uploaded.length ? uploaded[0].url : '',
+                            filename: uploaded.length ? uploaded[0].name : '',
+                            thumbnail_url: thumbs.length ? thumbs[0].url : '',
+                            allow_download: String(params.allow_download) !== '0',
+                            download_count: 0,
+                            view_count: 0,
+                            createdAt: b.dbMod.serverTimestamp(),
+                            updatedAt: b.dbMod.serverTimestamp()
+                        };
+                        return b.dbMod.addDoc(b.dbMod.collection(b.db, 'resources'), doc).then(function (ref) {
+                            doc.createdAt = new Date();
+                            return { id: ref.id, resource: shapeResource(ref.id, doc, user) };
+                        });
+                    });
+                });
+            });
+        });
+    };
+
+    actions.cv_delete_resource = function (b, params) {
+        var id = text(params.resource_id || params.id);
+        if (!id) throw new Error('That resource could not be found.');
+        return requireUser(b).then(function () {
+            return b.dbMod.deleteDoc(b.dbMod.doc(b.db, 'resources', id)).then(function () {
+                return { deleted: true, id: id };
+            });
+        });
+    };
+
+    actions.cv_download_resource = function (b, params) {
+        var id = text(params.resource_id || params.id);
+        if (!id) throw new Error('That resource could not be found.');
+        return currentUser(b).then(function () {
+            var ref = b.dbMod.doc(b.db, 'resources', id);
+            return b.dbMod.getDoc(ref).then(function (snap) {
+                if (!snap.exists()) throw new Error('That resource is no longer available.');
+                b.dbMod.updateDoc(ref, { download_count: b.dbMod.increment(1) }).catch(function () {});
+                return { id: id, url: text(snap.data().file_url), download_url: text(snap.data().file_url) };
+            });
+        });
+    };
+
+    // ---------------------------------------------------------------------
+    // Prayer requests
+    // ---------------------------------------------------------------------
+
+    function shapePrayer(id, data, viewer) {
+        var prayed = data.prayed || {};
+        return {
+            id: id,
+            content: text(data.content),
+            author: text((data.author || {}).name || 'Faith In Member'),
+            author_avatar: text((data.author || {}).avatar_url),
+            urgent: !!data.urgent,
+            prayed_count: Object.keys(prayed).length,
+            has_prayed: !!(viewer && prayed[viewer.uid]),
+            time: relativeTime(toDate(data.createdAt)),
+            can_edit: !!(viewer && data.authorUid === viewer.uid),
+            can_delete: !!(viewer && data.authorUid === viewer.uid)
+        };
+    }
+
+    actions.cv_get_prayers = function (b) {
+        return currentUser(b).then(function (user) {
+            var q = b.dbMod.query(
+                b.dbMod.collection(b.db, 'prayers'),
+                b.dbMod.orderBy('createdAt', 'desc'),
+                b.dbMod.limit(FEED_PAGE_SIZE)
+            );
+            return b.dbMod.getDocs(q).then(function (snap) {
+                var items = [];
+                snap.forEach(function (d) { items.push(shapePrayer(d.id, d.data(), user)); });
+                return { items: items };
+            });
+        });
+    };
+
+    actions.cv_create_prayer = function (b, params) {
+        var body = text(params.content || params.prayer, 4000);
+        if (!body) throw new Error('Write your prayer request first.');
+        return requireUser(b).then(function (user) {
+            return loadProfile(b, user).then(function (profile) {
+                var doc = {
+                    authorUid: user.uid,
+                    author: { uid: user.uid, name: profile.name, avatar_url: profile.avatar_url },
+                    content: body,
+                    urgent: String(params.urgent) === '1' || params.urgent === true,
+                    prayed: {},
+                    createdAt: b.dbMod.serverTimestamp()
+                };
+                return b.dbMod.addDoc(b.dbMod.collection(b.db, 'prayers'), doc).then(function (ref) {
+                    doc.createdAt = new Date();
+                    return { id: ref.id, prayer: shapePrayer(ref.id, doc, user) };
+                });
+            });
+        });
+    };
+
+    actions.cv_update_prayer = function (b, params) {
+        var id = text(params.prayer_id || params.id);
+        var body = text(params.content, 4000);
+        if (!id) throw new Error('That prayer request could not be found.');
+
+        return requireUser(b).then(function (user) {
+            var ref = b.dbMod.doc(b.db, 'prayers', id);
+            // No content means "I prayed for this" — a toggle on the member's
+            // own key in the prayed map.
+            if (!body) {
+                return b.dbMod.getDoc(ref).then(function (snap) {
+                    if (!snap.exists()) throw new Error('That prayer request is no longer available.');
+                    var prayed = snap.data().prayed || {};
+                    var next = Object.assign({}, prayed);
+                    var had = !!next[user.uid];
+                    if (had) delete next[user.uid]; else next[user.uid] = true;
+                    var update = {};
+                    update['prayed.' + user.uid] = had ? b.dbMod.deleteField() : true;
+                    return b.dbMod.updateDoc(ref, update).then(function () {
+                        return { id: id, prayed_count: Object.keys(next).length, has_prayed: !had };
+                    });
+                });
+            }
+            return b.dbMod.updateDoc(ref, { content: body }).then(function () {
+                return { id: id, updated: true };
+            });
+        });
+    };
+
+    actions.cv_delete_prayer = function (b, params) {
+        var id = text(params.prayer_id || params.id);
+        if (!id) throw new Error('That prayer request could not be found.');
+        return requireUser(b).then(function () {
+            return b.dbMod.deleteDoc(b.dbMod.doc(b.db, 'prayers', id)).then(function () {
+                return { deleted: true, id: id };
+            });
+        });
+    };
+
+    // ---------------------------------------------------------------------
+    // Ministry jobs
+    // ---------------------------------------------------------------------
+
+    function shapeJob(id, data, viewer) {
+        return {
+            id: id,
+            title: text(data.title),
+            organization: text(data.organization),
+            location: text(data.location),
+            job_type: text(data.job_type || 'Full-time'),
+            description: text(data.description),
+            apply_url: text(data.apply_url),
+            contact_email: text(data.contact_email),
+            featured: !!data.featured,
+            is_promoted: !!data.featured,
+            promoted: !!data.featured,
+            time: relativeTime(toDate(data.createdAt)),
+            can_edit: !!(viewer && data.authorUid === viewer.uid),
+            can_delete: !!(viewer && data.authorUid === viewer.uid)
+        };
+    }
+
+    function jobDoc(b, params, user) {
+        return {
+            authorUid: user.uid,
+            title: text(params.job_title || params.title, 300),
+            organization: text(params.job_organization || params.organization, 300),
+            location: text(params.job_location || params.location, 300),
+            job_type: text(params.job_type || 'Full-time'),
+            description: text(params.job_description || params.description, 8000),
+            apply_url: text(params.job_apply_url || params.apply_url),
+            contact_email: text(params.job_contact_email || params.contact_email),
+            featured: false
+        };
+    }
+
+    actions.cv_get_jobs = function (b) {
+        return currentUser(b).then(function (user) {
+            var q = b.dbMod.query(
+                b.dbMod.collection(b.db, 'jobs'),
+                b.dbMod.orderBy('createdAt', 'desc'),
+                b.dbMod.limit(FEED_PAGE_SIZE)
+            );
+            return b.dbMod.getDocs(q).then(function (snap) {
+                var items = [];
+                snap.forEach(function (d) { items.push(shapeJob(d.id, d.data(), user)); });
+                return { items: items };
+            });
+        });
+    };
+
+    actions.cv_create_job = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var doc = jobDoc(b, params, user);
+            if (!doc.title) throw new Error('Give the role a title.');
+            if (!doc.organization) throw new Error('Add the church or organisation name.');
+            doc.createdAt = b.dbMod.serverTimestamp();
+            doc.updatedAt = b.dbMod.serverTimestamp();
+            return b.dbMod.addDoc(b.dbMod.collection(b.db, 'jobs'), doc).then(function (ref) {
+                doc.createdAt = new Date();
+                return { id: ref.id, job: shapeJob(ref.id, doc, user) };
+            });
+        });
+    };
+
+    actions.cv_update_job = function (b, params) {
+        var id = text(params.job_id || params.id);
+        if (!id) throw new Error('That job could not be found.');
+        return requireUser(b).then(function (user) {
+            var doc = jobDoc(b, params, user);
+            delete doc.authorUid;
+            delete doc.featured;
+            doc.updatedAt = b.dbMod.serverTimestamp();
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'jobs', id), doc).then(function () {
+                return { id: id, updated: true };
+            });
+        });
+    };
+
+    actions.cv_delete_job = function (b, params) {
+        var id = text(params.job_id || params.id);
+        if (!id) throw new Error('That job could not be found.');
+        return requireUser(b).then(function () {
+            return b.dbMod.deleteDoc(b.dbMod.doc(b.db, 'jobs', id)).then(function () {
+                return { deleted: true, id: id };
+            });
+        });
+    };
+
+    // ---------------------------------------------------------------------
+    // Members and following
+    // ---------------------------------------------------------------------
+
+    function followId(followerUid, targetUid) {
+        return followerUid + '__' + targetUid;
+    }
+
+    function shapeMember(uid, data, viewer, following) {
+        var name = text(data.displayName || 'Faith In Member');
+        return {
+            id: parseInt(data.appUserId || numericId(uid), 10),
+            uid: uid,
+            name: name,
+            displayName: name,
+            avatar_url: text(data.photoURL),
+            avatar: text(data.photoURL),
+            headline: text(data.bio || data.role),
+            subtitle: text(data.role),
+            role: text(data.role),
+            church: text(data.church),
+            ministry: text(data.ministry),
+            location: text(data.location),
+            bio: text(data.bio),
+            verification: data.verification || null,
+            is_self: !!(viewer && viewer.uid === uid),
+            is_following: !!(following && following[uid]),
+            counts: {},
+            mutual_count: 0
+        };
+    }
+
+    /** Set of uids the viewer follows, for is_following flags. */
+    function followingMap(b, user) {
+        if (!user) return Promise.resolve({});
+        var q = b.dbMod.query(
+            b.dbMod.collection(b.db, 'follows'),
+            b.dbMod.where('followerUid', '==', user.uid),
+            b.dbMod.limit(500)
+        );
+        return b.dbMod.getDocs(q).then(function (snap) {
+            var map = {};
+            snap.forEach(function (d) { map[d.data().targetUid] = true; });
+            return map;
+        }).catch(function () { return {}; });
+    }
+
+    function listMembers(b, matcher) {
+        return currentUser(b).then(function (user) {
+            return followingMap(b, user).then(function (following) {
+                var q = b.dbMod.query(b.dbMod.collection(b.db, 'users'), b.dbMod.limit(200));
+                return b.dbMod.getDocs(q).then(function (snap) {
+                    var items = [];
+                    snap.forEach(function (d) {
+                        var data = d.data();
+                        if (user && d.id === user.uid) return;
+                        if (matcher && !matcher(data)) return;
+                        items.push(shapeMember(d.id, data, user, following));
+                    });
+                    return { items: items };
+                });
+            });
+        });
+    }
+
+    actions.cv_find_users = function (b, params) {
+        var term = text(params.search || params.query || params.s).toLowerCase();
+        if (!term) return listMembers(b, null);
+        return listMembers(b, function (data) {
+            return [data.displayName, data.email, data.church, data.ministry, data.role, data.location]
+                .some(function (field) {
+                    return String(field || '').toLowerCase().indexOf(term) !== -1;
+                });
+        });
+    };
+
+    actions.cv_get_suggested_users = function (b) {
+        return listMembers(b, null).then(function (result) {
+            // Suggest people the member is not already following.
+            var items = result.items.filter(function (u) { return !u.is_following; });
+            return { items: items.slice(0, 12) };
+        });
+    };
+
+    function setFollow(b, params, follow) {
+        var targetUid = text(params.target_uid || params.uid);
+        var targetId = text(params.user_id || params.id);
+
+        return requireUser(b).then(function (user) {
+            var resolve = targetUid
+                ? Promise.resolve(targetUid)
+                : b.dbMod.getDocs(b.dbMod.query(b.dbMod.collection(b.db, 'users'), b.dbMod.limit(200)))
+                    .then(function (snap) {
+                        var found = '';
+                        snap.forEach(function (d) {
+                            if (!found && String(d.data().appUserId) === targetId) found = d.id;
+                        });
+                        if (!found) throw new Error('That member could not be found.');
+                        return found;
+                    });
+
+            return resolve.then(function (uid) {
+                if (uid === user.uid) throw new Error('You cannot follow your own account.');
+                var ref = b.dbMod.doc(b.db, 'follows', followId(user.uid, uid));
+                if (!follow) {
+                    return b.dbMod.deleteDoc(ref).then(function () {
+                        return { following: false, uid: uid, user_id: targetId };
+                    });
+                }
+                return b.dbMod.setDoc(ref, {
+                    followerUid: user.uid,
+                    targetUid: uid,
+                    createdAt: b.dbMod.serverTimestamp()
+                }).then(function () {
+                    return { following: true, uid: uid, user_id: targetId };
+                });
+            });
+        });
+    }
+
+    actions.cv_social_follow_user = function (b, params) { return setFollow(b, params, true); };
+    actions.cv_social_unfollow_user = function (b, params) { return setFollow(b, params, false); };
+
+    function followList(b, field, otherField) {
+        return requireUser(b).then(function (user) {
+            var q = b.dbMod.query(
+                b.dbMod.collection(b.db, 'follows'),
+                b.dbMod.where(field, '==', user.uid),
+                b.dbMod.limit(200)
+            );
+            return b.dbMod.getDocs(q).then(function (snap) {
+                var uids = [];
+                snap.forEach(function (d) { uids.push(d.data()[otherField]); });
+                if (!uids.length) return { items: [] };
+                return followingMap(b, user).then(function (following) {
+                    return Promise.all(uids.map(function (uid) {
+                        return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', uid))
+                            .then(function (s) { return s.exists() ? shapeMember(uid, s.data(), user, following) : null; })
+                            .catch(function () { return null; });
+                    })).then(function (items) {
+                        return { items: items.filter(Boolean) };
+                    });
+                });
+            });
+        });
+    }
+
+    actions.cv_social_get_followers = function (b) { return followList(b, 'targetUid', 'followerUid'); };
+    actions.cv_social_get_following = function (b) { return followList(b, 'followerUid', 'targetUid'); };
+
+    // ---------------------------------------------------------------------
+    // Bookmarks, settings, verification, Bible notes
+    // ---------------------------------------------------------------------
+
+    actions.cv_toggle_bookmark = function (b, params) {
+        var id = text(params.post_id || params.object_id || params.id);
+        if (!id) throw new Error('That item could not be found.');
+        return requireUser(b).then(function (user) {
+            var ref = b.dbMod.doc(b.db, 'users', user.uid, 'bookmarks', id);
+            return b.dbMod.getDoc(ref).then(function (snap) {
+                if (snap.exists()) {
+                    return b.dbMod.deleteDoc(ref).then(function () {
+                        return { id: id, bookmarked: false };
+                    });
+                }
+                return b.dbMod.setDoc(ref, {
+                    objectId: id,
+                    objectType: text(params.object_type || 'post'),
+                    createdAt: b.dbMod.serverTimestamp()
+                }).then(function () {
+                    return { id: id, bookmarked: true };
+                });
+            });
+        });
+    };
+
     actions.cv_update_user_settings = function (b, params) {
-        return Promise.resolve({ saved: true, settings: params });
+        return requireUser(b).then(function (user) {
+            var settings = {
+                theme: text(params.theme) === 'dark' ? 'dark' : 'light',
+                lang: text(params.lang) || 'English',
+                notifications: String(params.notifications) !== '0'
+            };
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'users', user.uid), {
+                settings: settings,
+                updatedAt: b.dbMod.serverTimestamp()
+            }).then(function () {
+                return { saved: true, settings: settings };
+            });
+        });
+    };
+
+    var VERIFICATION_TIERS = [
+        { type: 'blue', label: 'Verified member', note: 'Identity confirmed.' },
+        { type: 'yellow', label: 'Verified church or ministry', note: 'Registered organisation.' },
+        { type: 'purple', label: 'Verified leader', note: 'Recognised pastor or teacher.' }
+    ];
+
+    actions.cv_get_verification_status = function (b) {
+        return currentUser(b).then(function (user) {
+            if (!user) return { verification: null, request: null, tiers: VERIFICATION_TIERS };
+            return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', user.uid)).then(function (snap) {
+                var data = snap.exists() ? snap.data() : {};
+                return {
+                    verification: data.verification || null,
+                    request: data.verificationRequest || null,
+                    tiers: VERIFICATION_TIERS
+                };
+            });
+        });
+    };
+
+    actions.cv_request_verification = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var request = {
+                status: 'pending',
+                note: text(params.note, 1000),
+                requestedAt: new Date().toISOString()
+            };
+            return b.dbMod.updateDoc(b.dbMod.doc(b.db, 'users', user.uid), {
+                verificationRequest: request,
+                updatedAt: b.dbMod.serverTimestamp()
+            }).then(function () {
+                return { request: request, tiers: VERIFICATION_TIERS };
+            });
+        });
+    };
+
+    actions.cv_bible_save_notes = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var notes = {};
+            try {
+                notes = params.notes ? JSON.parse(params.notes) : {};
+            } catch (e) {
+                notes = { Doctrine: text(params.Doctrine), Encouragement: text(params.Encouragement), Application: text(params.Application) };
+            }
+            var ref = b.dbMod.doc(b.db, 'users', user.uid, 'bible', 'sermonNotes');
+            return b.dbMod.setDoc(ref, { notes: notes, updatedAt: b.dbMod.serverTimestamp() })
+                .then(function () { return { saved: true, notes: notes }; });
+        });
+    };
+
+    actions.cv_bible_get_notes = function (b) {
+        return requireUser(b).then(function (user) {
+            return b.dbMod.getDoc(b.dbMod.doc(b.db, 'users', user.uid, 'bible', 'sermonNotes'))
+                .then(function (snap) {
+                    return { notes: snap.exists() ? (snap.data().notes || {}) : {} };
+                });
+        });
+    };
+
+    actions.cv_bible_save_typing_score = function (b, params) {
+        return requireUser(b).then(function (user) {
+            var ref = b.dbMod.doc(b.db, 'users', user.uid, 'bible', 'typing');
+            return b.dbMod.setDoc(ref, {
+                lastScore: parseInt(params.score || 0, 10) || 0,
+                updatedAt: b.dbMod.serverTimestamp()
+            }, { merge: true }).then(function () { return { saved: true }; });
+        });
     };
 
     // ---------------------------------------------------------------------
