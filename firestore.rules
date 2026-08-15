@@ -21,7 +21,9 @@ service cloud.firestore {
     function hasOnlyProfileFields() {
       return request.resource.data.keys().hasOnly([
         'uid', 'email', 'emailLower', 'displayName', 'firstName', 'lastName',
-        'photoURL', 'provider', 'providers', 'appUserId', 'siteOrigin',
+        'photoURL', 'coverURL', 'bio', 'role', 'gender', 'location', 'industry',
+        'church', 'ministry', 'settings', 'verification', 'verificationRequest',
+        'provider', 'providers', 'appUserId', 'siteOrigin',
         'createdAt', 'updatedAt', 'lastLoginAt', 'status'
       ]);
     }
@@ -33,20 +35,208 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.status == 'active';
 
-      allow read: if ownsProfile(userId);
+      // Members can see each other's profiles; the feed shows author names and
+      // avatars, and the Network tab needs to list people.
+      allow read: if isSignedIn();
 
       allow update: if ownsProfile(userId)
         && hasValidIdentity(userId)
         && hasOnlyProfileFields()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'firstName', 'lastName', 'photoURL', 'provider',
-          'providers', 'appUserId', 'siteOrigin', 'updatedAt', 'lastLoginAt'
+          'displayName', 'firstName', 'lastName', 'photoURL', 'coverURL', 'bio',
+          'role', 'gender', 'location', 'industry', 'church', 'ministry',
+          'settings', 'verificationRequest',
+          'provider', 'providers', 'appUserId', 'siteOrigin',
+          'updatedAt', 'lastLoginAt'
         ]);
 
       allow delete: if false;
     }
 
-    // Everything else stays locked.
+    // ---------------------------------------------------------------------
+    // Community feed
+    // ---------------------------------------------------------------------
+
+    match /posts/{postId} {
+      function isAuthor() {
+        return isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      function authorIsCaller() {
+        return isSignedIn()
+          && request.resource.data.authorUid is string
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.author.uid == request.auth.uid;
+      }
+
+      function withinSizeLimits() {
+        return request.resource.data.content.size() <= 20000
+          && request.resource.data.title.size() <= 300
+          && request.resource.data.media_items.size() <= 10;
+      }
+
+      function startsClean() {
+        // A new post cannot arrive with reactions or counts already set.
+        return request.resource.data.reactions.size() == 0
+          && request.resource.data.comment_count == 0
+          && request.resource.data.share_count == 0
+          && request.resource.data.repost_count == 0;
+      }
+
+      // Any signed-in member can read the feed. Private posts are filtered in
+      // the client; treat 'private' as a soft setting, not a security boundary.
+      allow read: if isSignedIn();
+
+      allow create: if authorIsCaller() && withinSizeLimits() && startsClean();
+
+      // Two ways to update a post:
+      //   1. The author edits their own post.
+      //   2. Any member reacts, or bumps a counter — but may only touch their
+      //      own key in the reactions map, never anyone else's.
+      //      (An empty diff satisfies hasOnly, so counter-only updates pass.)
+      function isEngagementOnly() {
+        return isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['reactions', 'comment_count', 'share_count', 'repost_count', 'updatedAt'])
+          && request.resource.data.reactions.diff(resource.data.reactions)
+               .affectedKeys().hasOnly([request.auth.uid]);
+      }
+
+      allow update: if (isAuthor() && withinSizeLimits()) || isEngagementOnly();
+
+      allow delete: if isAuthor();
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.content is string
+          && request.resource.data.content.size() > 0
+          && request.resource.data.content.size() <= 2000;
+        allow update: if false;
+        allow delete: if isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // Member-private subcollections
+    // ---------------------------------------------------------------------
+
+    // Nested paths do not inherit the /users/{userId} rules, so they are
+    // matched explicitly. All of these are private to the member.
+    match /users/{userId}/bookmarks/{bookmarkId} {
+      allow read, write: if ownsProfile(userId);
+    }
+
+    match /users/{userId}/bible/{docId} {
+      allow read, write: if ownsProfile(userId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Resource library
+    // ---------------------------------------------------------------------
+
+    match /resources/{resourceId} {
+      function isAuthor() {
+        return isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 300
+        && request.resource.data.download_count == 0
+        && request.resource.data.view_count == 0;
+
+      // The author may edit; any member may only bump the read counters.
+      allow update: if isAuthor()
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['download_count', 'view_count'])
+        );
+
+      allow delete: if isAuthor();
+    }
+
+    // ---------------------------------------------------------------------
+    // Prayer requests
+    // ---------------------------------------------------------------------
+
+    match /prayers/{prayerId} {
+      function isAuthor() {
+        return isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.content is string
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 4000
+        && request.resource.data.prayed.size() == 0;
+
+      // "I prayed for this" may only touch the member's own key.
+      allow update: if isAuthor()
+        || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prayed'])
+          && request.resource.data.prayed.diff(resource.data.prayed)
+               .affectedKeys().hasOnly([request.auth.uid])
+        );
+
+      allow delete: if isAuthor();
+    }
+
+    // ---------------------------------------------------------------------
+    // Ministry jobs
+    // ---------------------------------------------------------------------
+
+    match /jobs/{jobId} {
+      function isAuthor() {
+        return isSignedIn() && resource.data.authorUid == request.auth.uid;
+      }
+
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 300
+        && request.resource.data.description.size() <= 8000
+        // Only an administrator should be able to promote a listing.
+        && request.resource.data.featured == false;
+
+      allow update: if isAuthor()
+        && request.resource.data.featured == resource.data.featured;
+
+      allow delete: if isAuthor();
+    }
+
+    // ---------------------------------------------------------------------
+    // Follows
+    // ---------------------------------------------------------------------
+
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+
+      // A member may only create follow edges where they are the follower,
+      // so nobody can make someone else appear to follow them.
+      allow create: if isSignedIn()
+        && request.resource.data.followerUid == request.auth.uid
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid != request.auth.uid;
+
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.followerUid == request.auth.uid;
+    }
+
+    // Everything else stays locked until it has rules of its own.
     match /{document=**} {
       allow read, write: if false;
     }
