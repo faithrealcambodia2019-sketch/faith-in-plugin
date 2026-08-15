@@ -137,6 +137,20 @@ html body #cv-root .cv-feed-shortcut.is-active i {
   color: var(--fi-color-brand-blue) !important;
 }
 
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action i,
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action .cv-blessing-svg-icon {
+  color: var(--fi-color-brand-blue) !important;
+}
+
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--photo i,
+html body #cv-root .cv-react-fb-composer .cv-feed-compose-action--article i {
+  color: var(--fi-color-accent) !important;
+}
+
+html body #cv-root .cv-feed-profile-cover {
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 58%, #ede9fe 100%) !important;
+}
+
 html body #cv-root .cv-library-category.is-active {
   border-color: var(--fi-color-brand) !important;
   background: var(--fi-gradient-brand) !important;
